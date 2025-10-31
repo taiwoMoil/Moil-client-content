@@ -22,6 +22,26 @@ A Next.js application for managing content calendars across multiple clients wit
 - **UI Components**: Lucide React icons
 - **Styling**: Tailwind CSS with custom design system
 
+## Supabase Configuration
+
+### Important: Fix Production Redirect Issue
+
+To prevent email confirmation links from redirecting to localhost in production:
+
+1. **Go to your Supabase project dashboard**
+2. **Navigate to Authentication > URL Configuration**
+3. **Add your production domain to "Redirect URLs":**
+   ```
+   https://yourdomain.com/auth/callback
+   http://localhost:3000/auth/callback
+   ```
+4. **Set "Site URL" to your production domain:**
+   ```
+   https://yourdomain.com
+   ```
+
+This ensures email confirmation links work correctly in production.
+
 ## Getting Started
 
 ### Prerequisites

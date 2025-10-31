@@ -44,7 +44,8 @@ export default function SignupPage() {
         options: {
           data: {
             company_name: companyName
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/dashboard`
         }
       })
 
@@ -74,10 +75,11 @@ export default function SignupPage() {
               Account Created Successfully!
             </h2>
             <p className="text-gray-600 mb-4">
-              Please check your email to verify your account before signing in.
+              Please check your email and click the confirmation link to verify your account. 
+              You'll be redirected to the dashboard after confirmation.
             </p>
             <p className="text-sm text-gray-500">
-              Redirecting to login page...
+              Redirecting to login page in case you want to sign in later...
             </p>
           </div>
         </div>
