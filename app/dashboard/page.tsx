@@ -615,16 +615,6 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* OneDrive External Links */}
             <a
-              href="https://onedrive.live.com/edit.aspx?resid=YOUR_ONEDRIVE_ID&cid=YOUR_CID&app=Excel"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span>📥 Full Calendar CSV</span>
-            </a>
-            
-            <a
               href="https://onedrive.live.com/edit.aspx?resid=YOUR_TEAM_ONEDRIVE_ID&cid=YOUR_CID&app=Excel"
               target="_blank"
               rel="noopener noreferrer"
