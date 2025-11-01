@@ -1,31 +1,146 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Primary Design System Colors */
+  --primary: #5843BE;
+  --primary-50: #F4F2FF;
+  --primary-100: #EBE7FF;
+  --primary-200: #D9D2FF;
+  --primary-300: #BFB1FF;
+  --primary-400: #9F87FF;
+  --primary-500: #5843BE;
+  --primary-600: #4F3AAB;
+  --primary-700: #432F91;
+  --primary-800: #382677;
+  --primary-900: #2E1F5E;
+  
+  /* Secondary Design System Colors */
+  --secondary: #FF6633;
+  --secondary-50: #FFF4F0;
+  --secondary-100: #FFE6DB;
+  --secondary-200: #FFCCB8;
+  --secondary-300: #FFA885;
+  --secondary-400: #FF7A52;
+  --secondary-500: #FF6633;
+  --secondary-600: #E55A2E;
+  --secondary-700: #CC4F29;
+  --secondary-800: #B34424;
+  --secondary-900: #99391F;
+  
+  /* Neutral Colors */
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  
+  /* Semantic Colors */
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+  --info: var(--primary);
+  
+  /* Background & Text */
+  --background: #FFFFFF;
+  --foreground: var(--gray-900);
+  --muted: var(--gray-100);
+  --muted-foreground: var(--gray-500);
+  
+  /* Borders & Shadows */
+  --border: var(--gray-200);
+  --ring: var(--primary-500);
+  
+  /* Grid Pattern */
+  --grid-size: 20px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --muted: var(--gray-800);
+    --muted-foreground: var(--gray-400);
+    --border: var(--gray-700);
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Grid Background Pattern - Now using DotGrid component */
+/* Keeping this comment for reference - manual grid styles removed */
+
+/* Text Utilities */
 .text-background {
-  color: var(--background);
+  color: var(--foreground);
 }
 
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.text-secondary {
+  color: var(--secondary);
+}
+
+/* Background Utilities */
+.bg-primary {
+  background-color: var(--primary);
+}
+
+.bg-secondary {
+  background-color: var(--secondary);
+}
+
+.bg-muted {
+  background-color: var(--muted);
+}
+
+/* Border Utilities */
+.border-primary {
+  border-color: var(--primary);
+}
+
+.border-secondary {
+  border-color: var(--secondary);
+}
+
+/* Focus Ring */
+.focus-ring:focus {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Card Shadows */
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.card-shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

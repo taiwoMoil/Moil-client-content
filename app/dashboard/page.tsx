@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
-import { LogOut, Download, Copy, MessageCircle, Loader2, Upload, ExternalLink } from 'lucide-react'
+import { Metaballs } from '@paper-design/shaders-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -14,9 +15,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [user, setUser] = useState<User | null>(null)
-  const [commentModal, setCommentModal] = useState<{ 
-    isOpen: boolean; 
-    itemId: string; 
+  const [commentModal, setCommentModal] = useState<{
+    isOpen: boolean;
+    itemId: string;
     comments: string[];
     newComment: string;
   }>({
@@ -26,9 +27,27 @@ export default function DashboardPage() {
     newComment: ''
   })
   const [updating, setUpdating] = useState<string | null>(null)
+  const [updateModal, setUpdateModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: 'team' | 'client' | 'comment' | null;
+  }>({
+    isOpen: false,
+    message: '',
+    type: null
+  })
   const [uploading, setUploading] = useState(false)
   const [uploadModal, setUploadModal] = useState(false)
-  
+  const [linkModal, setLinkModal] = useState<{
+    isOpen: boolean;
+    type: 'team_review' | 'client_dropoff' | 'ready_schedule' | 'status_report' | null;
+    currentLink: string;
+  }>({
+    isOpen: false,
+    type: null,
+    currentLink: ''
+  })
+
   const router = useRouter()
   const supabase = createClient()
 
@@ -50,7 +69,7 @@ export default function DashboardPage() {
         .single()
 
       console.log(userProfile);
-      
+
       if (userProfile) {
         setUser(userProfile)
       }
@@ -61,7 +80,7 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/calendar')
       const result = await response.json()
-      
+
       if (response.ok) {
         setCalendarData(result.data || [])
       } else {
@@ -88,8 +107,22 @@ export default function DashboardPage() {
     router.push('/login')
   }
 
-  const updateCalendarItem = async (id: string, updates: Partial<ContentCalendarItem>) => {
+  const updateCalendarItem = async (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => {
     setUpdating(id)
+    
+    // Show update modal based on type
+    if (updateType) {
+      const messages = {
+        team: 'Updating team status...',
+        client: 'Updating client status...'
+      }
+      setUpdateModal({
+        isOpen: true,
+        message: messages[updateType],
+        type: updateType
+      })
+    }
+
     try {
       const response = await fetch(`/api/calendar/${id}`, {
         method: 'PATCH',
@@ -101,15 +134,35 @@ export default function DashboardPage() {
 
       if (response.ok) {
         const result = await response.json()
-        setCalendarData(prev => 
+        setCalendarData(prev =>
           prev.map(item => item.id === id ? result.data : item)
         )
+        
+        // Show success message briefly
+        if (updateType) {
+          const successMessages = {
+            team: 'Team status updated successfully!',
+            client: 'Client status updated successfully!'
+          }
+          setUpdateModal({
+            isOpen: true,
+            message: successMessages[updateType],
+            type: updateType
+          })
+          
+          // Auto-close after 1.5 seconds
+          setTimeout(() => {
+            setUpdateModal({ isOpen: false, message: '', type: null })
+          }, 1500)
+        }
       } else {
         const error = await response.json()
         alert('Failed to update: ' + error.error)
+        setUpdateModal({ isOpen: false, message: '', type: null })
       }
     } catch (err) {
       alert('Failed to update item')
+      setUpdateModal({ isOpen: false, message: '', type: null })
     } finally {
       setUpdating(null)
     }
@@ -125,9 +178,9 @@ export default function DashboardPage() {
   }
 
   const openCommentModal = (itemId: string, currentComments: string[]) => {
-    setCommentModal({ 
-      isOpen: true, 
-      itemId, 
+    setCommentModal({
+      isOpen: true,
+      itemId,
       comments: currentComments || [],
       newComment: ''
     })
@@ -135,14 +188,39 @@ export default function DashboardPage() {
 
   const addComment = async () => {
     if (commentModal.itemId && commentModal.newComment.trim()) {
-      const updatedComments = [...commentModal.comments, commentModal.newComment.trim()]
-      await updateCalendarItem(commentModal.itemId, { comments: updatedComments })
-      setCommentModal({ 
-        isOpen: false, 
-        itemId: '', 
-        comments: [],
-        newComment: ''
+      // Show comment update modal
+      setUpdateModal({
+        isOpen: true,
+        message: 'Adding comment...',
+        type: 'comment'
       })
+
+      const updatedComments = [...commentModal.comments, commentModal.newComment.trim()]
+      
+      try {
+        await updateCalendarItem(commentModal.itemId, { comments: updatedComments })
+        
+        // Show success message
+        setUpdateModal({
+          isOpen: true,
+          message: 'Comment added successfully!',
+          type: 'comment'
+        })
+        
+        setCommentModal({
+          isOpen: false,
+          itemId: '',
+          comments: [],
+          newComment: ''
+        })
+        
+        // Auto-close after 1.5 seconds
+        setTimeout(() => {
+          setUpdateModal({ isOpen: false, message: '', type: null })
+        }, 1500)
+      } catch (err) {
+        setUpdateModal({ isOpen: false, message: '', type: null })
+      }
     }
   }
 
@@ -153,19 +231,19 @@ export default function DashboardPage() {
       'ready-review': 0,
       'ready-post': 0
     }
-    
+
     const clientCounts = {
       'not-submitted': 0,
       'under-review': 0,
       'approved': 0,
       'needs-changes': 0
     }
-    
+
     calendarData.forEach(item => {
       teamCounts[item.team_status]++
       clientCounts[item.client_status]++
     })
-    
+
     return { teamCounts, clientCounts }
   }
 
@@ -176,17 +254,17 @@ export default function DashboardPage() {
     setUploading(true)
     try {
       const text = await file.text()
-      
+
       // Parse CSV properly handling quoted fields with commas and newlines
       const parseCSVLine = (line: string): string[] => {
         const result: string[] = []
         let current = ''
         let inQuotes = false
         let i = 0
-        
+
         while (i < line.length) {
           const char = line[i]
-          
+
           if (char === '"') {
             if (inQuotes && line[i + 1] === '"') {
               // Escaped quote
@@ -207,23 +285,23 @@ export default function DashboardPage() {
             i++
           }
         }
-        
+
         result.push(current.trim())
         return result
       }
-      
+
       // Split text into lines, but handle multi-line quoted fields
       const lines: string[] = []
       let currentLine = ''
       let inQuotes = false
-      
+
       for (let i = 0; i < text.length; i++) {
         const char = text[i]
-        
+
         if (char === '"') {
           inQuotes = !inQuotes
         }
-        
+
         if (char === '\n' && !inQuotes) {
           if (currentLine.trim()) {
             lines.push(currentLine.trim())
@@ -233,24 +311,24 @@ export default function DashboardPage() {
           currentLine += char
         }
       }
-      
+
       if (currentLine.trim()) {
         lines.push(currentLine.trim())
       }
-      
+
       if (lines.length === 0) {
         throw new Error('No data found in CSV')
       }
-      
+
       const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g, ''))
-      
+
       const csvData = lines.slice(1).map(line => {
         const values = parseCSVLine(line).map(v => v.replace(/^"|"$/g, ''))
         const item: any = {}
-        
+
         headers.forEach((header, index) => {
           const value = values[index] || ''
-          
+
           // Map CSV headers to database fields
           switch (header.toLowerCase()) {
             case 'date':
@@ -321,16 +399,16 @@ export default function DashboardPage() {
               item[header.toLowerCase().replace(/\s+/g, '_')] = value
           }
         })
-        
+
         // Set defaults
         item.is_new = true
         if (!item.comments) {
           item.comments = []
         }
-        
+
         return item
       }).filter(item => item.date && item.hook) // Only include rows with date and hook
-      
+
       // Upload to database
       const response = await fetch('/api/calendar/bulk', {
         method: 'POST',
@@ -342,15 +420,15 @@ export default function DashboardPage() {
 
       if (response.ok) {
         const result = await response.json()
-        
+
         // Update the calendar data with the new items
         setCalendarData(result.data || [])
         setUploadModal(false)
-        
+
         // Show success message with details
         const successMessage = `✅ Successfully uploaded ${result.data?.length || csvData.length} calendar items!\n\nThe dashboard has been updated with your new content.`
         alert(successMessage)
-        
+
         // Optionally refresh the page data to ensure consistency
         setTimeout(() => {
           fetchCalendarData()
@@ -376,10 +454,10 @@ export default function DashboardPage() {
     }
 
     const headers = [
-      'Date', 'Day', 'Platform', 'Type', 'Team Status', 'Client Status', 
+      'Date', 'Day', 'Platform', 'Type', 'Team Status', 'Client Status',
       'Hook', 'Copy', 'KPI', 'Image Prompt 1', 'Image Prompt 2', 'Comments'
     ]
-    
+
     const csvContent = [
       headers.join(','),
       ...calendarData.map(item => [
@@ -409,13 +487,75 @@ export default function DashboardPage() {
     document.body.removeChild(link)
   }
 
+  // OneDrive Link Management
+  const handleLinkClick = (type: 'team_review' | 'client_dropoff' | 'ready_schedule' | 'status_report') => {
+    const linkMap = {
+      team_review: user?.onedrive_team_review_link,
+      client_dropoff: user?.onedrive_client_dropoff_link,
+      ready_schedule: user?.onedrive_ready_schedule_link,
+      status_report: user?.onedrive_status_report_link
+    }
+
+    const currentLink = linkMap[type]
+
+    if (currentLink) {
+      window.open(currentLink, '_blank', 'noopener,noreferrer')
+    } else {
+      setLinkModal({
+        isOpen: true,
+        type,
+        currentLink: ''
+      })
+    }
+  }
+
+  const saveLinkUpdate = async () => {
+    if (!linkModal.type || !user) return
+
+    const fieldMap = {
+      team_review: 'onedrive_team_review_link',
+      client_dropoff: 'onedrive_client_dropoff_link',
+      ready_schedule: 'onedrive_ready_schedule_link',
+      status_report: 'onedrive_status_report_link'
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ [fieldMap[linkModal.type]]: linkModal.currentLink })
+        .eq('id', user.id)
+
+      if (error) {
+        alert('Failed to save link: ' + error.message)
+        return
+      }
+
+      // Update local user state
+      setUser(prev => {
+        if (!prev || !linkModal.type) return prev
+        return {
+          ...prev,
+          [fieldMap[linkModal.type]]: linkModal.currentLink
+        }
+      })
+
+      setLinkModal({ isOpen: false, type: null, currentLink: '' })
+
+      if (linkModal.currentLink) {
+        window.open(linkModal.currentLink, '_blank', 'noopener,noreferrer')
+      }
+    } catch (err) {
+      alert('Failed to save link')
+    }
+  }
+
   if (loading) {
     return <DashboardSkeleton />
   }
 
   if (error) {
     const isDatabaseSetupError = error.includes('Database tables not set up')
-    
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center max-w-2xl">
@@ -424,7 +564,7 @@ export default function DashboardPage() {
             {isDatabaseSetupError ? 'Database Setup Required' : 'Error'}
           </h1>
           <p className="text-gray-600 mb-6">{error}</p>
-          
+
           {isDatabaseSetupError && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left">
               <h3 className="font-bold text-blue-800 mb-3">📋 Setup Instructions:</h3>
@@ -438,18 +578,18 @@ export default function DashboardPage() {
               </ol>
             </div>
           )}
-          
+
           <div className="flex gap-4 justify-center">
-            <button 
+            <button
               onClick={fetchCalendarData}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Retry
             </button>
             {isDatabaseSetupError && (
-              <a 
-                href="https://supabase.com/dashboard" 
-                target="_blank" 
+              <a
+                href="https://supabase.com/dashboard"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
@@ -464,288 +604,494 @@ export default function DashboardPage() {
 
   return (
     <ClientBranding user={user}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+      <div className="min-h-screen bg-background relative">
+        <Metaballs
+          colors={["#5843BE", "#FF6633", "#ffc105", "#ffc800", "#f585ff"]}
+          colorBack="#000000"
+          count={10}
+          size={0.83}
+          speed={1}
+          className="absolute inset-0 opacity-30" style={{ filter: 'invert(1)' }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/90 to-orange-50/20 pointer-events-none" />
         {/* Header */}
-        <ClientHeader 
+        <ClientHeader
           user={user}
           userEmail={user?.email || ''}
           onLogout={handleLogout}
         />
 
-      <div className="max-w-7xl text-background mx-auto px-4 py-8">
-        {/* Workflow Guide */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg shadow-lg p-6 mb-8 border-l-4 border-blue-500">
-          <h3 className="text-xl font-bold mb-4 text-gray-800">🔄 How the Workflow Works</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Step 1 */}
-            <div className="bg-white rounded-lg p-4 shadow-sm border-t-4 border-orange-400">
-              <div className="text-center mb-3">
-                <div className="text-2xl font-bold text-orange-600">Step 1</div>
-                <div className="text-sm font-semibold text-gray-700">👥 Our Team</div>
+        <div className="max-w-full text-background mx-auto px-4 py-8">
+          {/* Workflow Guide */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl card-shadow-lg p-8 mb-8 border border-gray-200 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)]"></div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)] rounded-lg">
+                <Workflow className="h-6 w-6 text-white" />
               </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                  <span>Not Started</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-0 h-0 border-l-2 border-gray-400 border-t-2 border-transparent border-b-2 ml-1"></div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
-                  <span>In Progress</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-0 h-0 border-l-2 border-gray-400 border-t-2 border-transparent border-b-2 ml-1"></div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                  <span>Ready for Review</span>
-                </div>
-              </div>
+              <h3 className="text-2xl font-bold text-[var(--primary)]">Content Workflow Process</h3>
             </div>
 
-            {/* Step 2 */}
-            <div className="bg-white rounded-lg p-4 shadow-sm border-t-4 border-purple-400">
-              <div className="text-center mb-3">
-                <div className="text-2xl font-bold text-purple-600">Step 2</div>
-                <div className="text-sm font-semibold text-gray-700">👤 Client</div>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
-                  <span>Under Review</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-0 h-0 border-l-2 border-gray-400 border-t-2 border-transparent border-b-2 ml-1"></div>
-                </div>
-                <div className="flex items-center space-x-2 text-green-600">
-                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                  <span>✅ Approved</span>
-                </div>
-                <div className="text-center text-gray-500 text-xs">OR</div>
-                <div className="flex items-center space-x-2 text-red-600">
-                  <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                  <span>❌ Needs Changes</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div className="bg-white rounded-lg p-4 shadow-sm border-t-4 border-green-400">
-              <div className="text-center mb-3">
-                <div className="text-2xl font-bold text-green-600">Step 3</div>
-                <div className="text-sm font-semibold text-gray-700">✅ If Approved</div>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                  <span>👥 Ready to Post</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-0 h-0 border-l-2 border-gray-400 border-t-2 border-transparent border-b-2 ml-1"></div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                  <span>📅 Schedule & Publish</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 4 */}
-            <div className="bg-white rounded-lg p-4 shadow-sm border-t-4 border-red-400">
-              <div className="text-center mb-3">
-                <div className="text-2xl font-bold text-red-600">Step 4</div>
-                <div className="text-sm font-semibold text-gray-700">🔄 If Changes</div>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-orange-400 rounded-full"></div>
-                  <span>👥 In Progress (revise)</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-0 h-0 border-l-2 border-gray-400 border-t-2 border-transparent border-b-2 ml-1"></div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                  <span>Ready for Review</span>
-                </div>
-                <div className="text-center text-gray-500 text-xs mt-2">↩️ Loop back to Step 2</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Dashboard */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <h3 className="text-xl font-bold mb-6" style={{ color: user?.brand_color || '#3B82F6' }}>📊 Workflow Status Dashboard</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-blue-50 rounded-lg p-4 border-t-4 border-blue-500">
-              <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">👥 Our Team Status</h4>
-              <div className="space-y-2">
-                {Object.entries(teamCounts).map(([status, count]) => (
-                  <div key={status} className="flex text-background justify-between items-center bg-white p-3 rounded-lg">
-                    <span className="font-medium text-sm capitalize">{status.replace('-', ' ')}</span>
-                    <span className="text-xl font-bold text-gray-800">{count}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Step 1 */}
+              <div className="bg-white rounded-xl p-6 card-shadow border border-gray-100 hover:shadow-lg transition-all duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg">
+                    <Users className="h-5 w-5 text-white" />
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-purple-50 rounded-lg p-4 border-t-4 border-purple-500">
-              <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-4">👤 Client Status</h4>
-              <div className="space-y-2">
-                {Object.entries(clientCounts).map(([status, count]) => (
-                  <div key={status} className="flex text-background justify-between items-center bg-white p-3 rounded-lg">
-                    <span className="font-medium text-sm capitalize">{status.replace('-', ' ')}</span>
-                    <span className="text-xl font-bold text-gray-800">{count}</span>
+                  <div>
+                    <div className="text-lg font-bold text-gray-900">Step 1</div>
+                    <div className="text-sm text-gray-600">Our Team</div>
                   </div>
-                ))}
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                    <Clock className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm text-gray-900">Not Started</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-gray-300 mx-auto" />
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-orange-50">
+                    <Loader2 className="h-4 w-4 text-orange-500" />
+                    <span className="text-sm text-gray-900">In Progress</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-gray-300 mx-auto" />
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-50">
+                    <CheckCircle className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm text-gray-900">Ready for Review</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-white rounded-xl p-6 card-shadow border border-gray-100 hover:shadow-lg transition-all duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg">
+                    <UserIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-gray-900">Step 2</div>
+                    <div className="text-sm text-gray-600">Client Review</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-purple-50">
+                    <Clock className="h-4 w-4 text-purple-500" />
+                    <span className="text-sm text-gray-900">Under Review</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-gray-300 mx-auto" />
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="flex items-center gap-3 p-2 rounded-lg bg-green-50">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <span className="text-sm text-gray-900">Approved</span>
+                    </div>
+                    <div className="text-center text-xs text-gray-500">OR</div>
+                    <div className="flex items-center gap-3 p-2 rounded-lg bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                      <span className="text-sm text-gray-900">Needs Changes</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-white rounded-xl p-6 card-shadow border border-gray-100 hover:shadow-lg transition-all duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-gradient-to-br from-green-500 to-green-600 rounded-lg">
+                    <CheckCircle className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-gray-900">Step 3</div>
+                    <div className="text-sm text-gray-600">If Approved</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-green-50">
+                    <Users className="h-4 w-4 text-green-500" />
+                    <span className="text-sm text-gray-900">Ready to Post</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-gray-300 mx-auto" />
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-green-100">
+                    <Calendar className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-gray-900">Schedule & Publish</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="bg-white rounded-xl p-6 card-shadow border border-gray-100 hover:shadow-lg transition-all duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-gradient-to-br from-red-500 to-red-600 rounded-lg">
+                    <ArrowRight className="h-5 w-5 text-white transform rotate-180" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-gray-900">Step 4</div>
+                    <div className="text-sm text-gray-600">If Changes</div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-orange-50">
+                    <Loader2 className="h-4 w-4 text-orange-500" />
+                    <span className="text-sm text-gray-900">In Progress (revise)</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-gray-300 mx-auto" />
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-50">
+                    <CheckCircle className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm text-gray-900">Ready for Review</span>
+                  </div>
+                  <div className="text-center text-xs text-gray-500 mt-3 p-2 bg-gray-50 rounded-lg">
+                    Loop back to Step 2
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Action Buttons Section */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h3 className="text-xl font-bold mb-4" style={{ color: user?.brand_color || '#3B82F6' }}>📋 Quick Actions</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* OneDrive External Links */}
-            <a
-              href="https://onedrive.live.com/edit.aspx?resid=YOUR_TEAM_ONEDRIVE_ID&cid=YOUR_CID&app=Excel"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center space-x-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span>👥 Our Team View</span>
-            </a>
-            
-            <a
-              href="https://onedrive.live.com/edit.aspx?resid=YOUR_CLIENT_ONEDRIVE_ID&cid=YOUR_CID&app=Excel"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center space-x-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span>👤 Client Review Package</span>
-            </a>
-            
-            <a
-              href="https://onedrive.live.com/edit.aspx?resid=YOUR_STATUS_ONEDRIVE_ID&cid=YOUR_CID&app=Excel"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center space-x-2 px-4 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              <span>📊 Status Report</span>
-            </a>
-          </div>
-          
-          {/* CSV Upload/Download Actions */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h4 className="text-lg font-semibold mb-4 text-gray-800">📂 File Management</h4>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => setUploadModal(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
-              >
-                <Upload className="h-4 w-4" />
-                <span>Upload CSV</span>
-              </button>
-              
-              <button
-                onClick={handleCSVDownload}
-                disabled={calendarData.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                <Download className="h-4 w-4" />
-                <span>Download CSV</span>
-              </button>
+          {/* Status Dashboard */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl card-shadow-lg p-8 mb-8 border border-gray-200 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)]"></div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)] rounded-lg">
+                <BarChart3 className="h-6 w-6 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-[var(--primary)]">Workflow Status Dashboard</h3>
             </div>
-          </div>
-        </div>
 
-        {/* Calendar Table */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-            <table className="w-full table-fixed min-w-[1400px]">
-              <thead className="text-white sticky top-0 z-10" style={{ backgroundColor: user?.brand_color || '#3B82F6' }}>
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold w-24">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold w-32">Platform</th>
-                  <th className="px-4 py-3 text-left font-semibold w-24">Type</th>
-                  <th className="px-4 py-3 text-left font-semibold w-40">👥 Our Team</th>
-                  <th className="px-4 py-3 text-left font-semibold w-40">👤 Client</th>
-                  <th className="px-4 py-3 text-left font-semibold w-48">Hook</th>
-                  <th className="px-4 py-3 text-left font-semibold w-64">Caption</th>
-                  <th className="px-4 py-3 text-left font-semibold w-64">Image Prompts</th>
-                  <th className="px-4 py-3 text-left font-semibold w-32">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {calendarData.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-4">
-                        <div className="text-6xl opacity-50">📅</div>
-                        <div className="text-xl font-semibold text-gray-800">No Content Calendar Yet</div>
-                        <div className="text-gray-800 max-w-md">
-                          {user?.company_name ? (
-                            `Welcome to ${user.company_name}! Your content calendar will appear here once content is added.`
-                          ) : (
-                            'Your content calendar will appear here once content is added.'
-                          )}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Team Status */}
+              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500 rounded-lg">
+                      <Users className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Our Team Status</h4>
+                      <p className="text-sm text-gray-600">Internal workflow progress</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  {Object.entries(teamCounts).map(([status, count]) => {
+                    const statusConfig = {
+                      'not-started': { icon: Clock, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Not Started' },
+                      'in-progress': { icon: Loader2, color: 'text-orange-600', bg: 'bg-orange-50', label: 'In Progress' },
+                      'ready-review': { icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Ready for Review' },
+                      'ready-post': { icon: Calendar, color: 'text-green-600', bg: 'bg-green-50', label: 'Ready to Post' }
+                    }[status] || { icon: Clock, color: 'text-gray-600', bg: 'bg-gray-50', label: status }
+
+                    const IconComponent = statusConfig.icon
+
+                    return (
+                      <div key={status} className={`flex items-center justify-between p-3 rounded-lg ${statusConfig.bg} border border-gray-100`}>
+                        <div className="flex items-center gap-3">
+                          <IconComponent className={`h-4 w-4 ${statusConfig.color}`} />
+                          <span className="font-medium text-sm text-gray-900">{statusConfig.label}</span>
                         </div>
-                        <button
-                          onClick={() => window.location.reload()}
-                          className="mt-4 px-6 py-2 text-white rounded-lg transition-colors hover:opacity-90"
-                          style={{ 
-                            backgroundColor: user?.brand_color || '#3B82F6'
-                          }}
-                        >
-                          Refresh
-                        </button>
+                        <span className="text-xl font-bold text-gray-900">{count}</span>
                       </div>
-                    </td>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Client Status */}
+              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-500 rounded-lg">
+                      <UserIcon className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Client Status</h4>
+                      <p className="text-sm text-gray-600">Client review progress</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  {Object.entries(clientCounts).map(([status, count]) => {
+                    const statusConfig = {
+                      'not-submitted': { icon: Clock, color: 'text-gray-600', bg: 'bg-gray-50', label: 'Not Submitted' },
+                      'under-review': { icon: Loader2, color: 'text-purple-600', bg: 'bg-purple-50', label: 'Under Review' },
+                      'approved': { icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', label: 'Approved' },
+                      'needs-changes': { icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', label: 'Needs Changes' }
+                    }[status] || { icon: Clock, color: 'text-gray-600', bg: 'bg-gray-50', label: status }
+
+                    const IconComponent = statusConfig.icon
+
+                    return (
+                      <div key={status} className={`flex items-center justify-between p-3 rounded-lg ${statusConfig.bg} border border-gray-100`}>
+                        <div className="flex items-center gap-3">
+                          <IconComponent className={`h-4 w-4 ${statusConfig.color}`} />
+                          <span className="font-medium text-sm text-gray-900">{statusConfig.label}</span>
+                        </div>
+                        <span className="text-xl font-bold text-gray-900">{count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons Section */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl card-shadow-lg p-8 mb-8 border border-gray-200 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)]"></div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gradient-to-br from-[var(--secondary)] to-[var(--secondary-600)] rounded-lg">
+                <Link className="h-6 w-6 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-[var(--primary)]">OneDrive Integration</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Team Review Link */}
+              <button
+                onClick={() => handleLinkClick('team_review')}
+                className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="p-2 bg-blue-100 group-hover:bg-blue-200 rounded-lg transition-colors">
+                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900 text-sm">Ready for Review</div>
+                  <div className="text-xs text-gray-500">Team review files</div>
+                  {user?.onedrive_team_review_link ? (
+                    <div className="text-xs text-green-600 mt-1">✓ Link configured</div>
+                  ) : (
+                    <div className="text-xs text-orange-600 mt-1">⚠ Setup required</div>
+                  )}
+                </div>
+              </button>
+
+              {/* Client Dropoff Link */}
+              <button
+                onClick={() => handleLinkClick('client_dropoff')}
+                className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="p-2 bg-purple-100 group-hover:bg-purple-200 rounded-lg transition-colors">
+                  <UserIcon className="h-5 w-5 text-purple-600" />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900 text-sm">Client Dropoff</div>
+                  <div className="text-xs text-gray-500">Client delivery files</div>
+                  {user?.onedrive_client_dropoff_link ? (
+                    <div className="text-xs text-green-600 mt-1">✓ Link configured</div>
+                  ) : (
+                    <div className="text-xs text-orange-600 mt-1">⚠ Setup required</div>
+                  )}
+                </div>
+              </button>
+
+              {/* Ready to Schedule Link */}
+              <button
+                onClick={() => handleLinkClick('ready_schedule')}
+                className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-green-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="p-2 bg-green-100 group-hover:bg-green-200 rounded-lg transition-colors">
+                  <Calendar className="h-5 w-5 text-green-600" />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900 text-sm">Ready to Schedule</div>
+                  <div className="text-xs text-gray-500">Scheduling files</div>
+                  {user?.onedrive_ready_schedule_link ? (
+                    <div className="text-xs text-green-600 mt-1">✓ Link configured</div>
+                  ) : (
+                    <div className="text-xs text-orange-600 mt-1">⚠ Setup required</div>
+                  )}
+                </div>
+              </button>
+
+              {/* Status Report Link */}
+              <button
+                onClick={() => handleLinkClick('status_report')}
+                className="group flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="p-2 bg-emerald-100 group-hover:bg-emerald-200 rounded-lg transition-colors">
+                  <BarChart3 className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-gray-900 text-sm">Status Report</div>
+                  <div className="text-xs text-gray-500">Analytics & reports</div>
+                  {user?.onedrive_status_report_link ? (
+                    <div className="text-xs text-green-600 mt-1">✓ Link configured</div>
+                  ) : (
+                    <div className="text-xs text-orange-600 mt-1">⚠ Setup required</div>
+                  )}
+                </div>
+              </button>
+            </div>
+
+            {/* CSV Upload/Download Actions */}
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-1.5 bg-gray-100 rounded-lg">
+                  <FileText className="h-4 w-4 text-gray-600" />
+                </div>
+                <h4 className="text-lg font-semibold text-gray-900">File Management</h4>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setUploadModal(true)}
+                  className="flex items-center gap-3 p-4 bg-gradient-to-r from-[var(--secondary)] to-[var(--secondary-600)] text-white rounded-xl hover:from-[var(--secondary-600)] hover:to-[var(--secondary-700)] transition-all duration-200 shadow-sm"
+                >
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <Upload className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold">Upload CSV</div>
+                    <div className="text-sm opacity-90">Import content calendar</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleCSVDownload}
+                  disabled={calendarData.length === 0}
+                  className={`flex items-center gap-3 p-4 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-600)] text-white rounded-xl hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] transition-all duration-200 shadow-sm ${calendarData.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <Download className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold">Download CSV</div>
+                    <div className="text-sm opacity-90">Export current data</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Calendar Table */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl card-shadow-lg border border-gray-200 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)]"></div>
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)] rounded-lg">
+                  <Calendar className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-[var(--primary)]">Content Calendar</h3>
+              </div>
+            </div>
+            <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
+              <table className="w-full min-w-[1600px]">
+                <thead className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-600)] text-white sticky top-0 z-10">
+                  <tr>
+                    <th className="px-6 py-4 text-left font-semibold w-32">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>Date</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-40">
+                      <div className="flex items-center gap-2">
+                        <Hash className="h-4 w-4" />
+                        <span>Platform</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-32">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        <span>Type</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-44">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        <span>Our Team</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-44">
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="h-4 w-4" />
+                        <span>Client</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-56">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-4 w-4" />
+                        <span>Hook</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-72">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        <span>Caption</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-72">
+                      <div className="flex items-center gap-2">
+                        <Image className="h-4 w-4" />
+                        <span>Image Prompts</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-36">
+                      <div className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        <span>Actions</span>
+                      </div>
+                    </th>
                   </tr>
-                ) : (
-                  calendarData.map((item, index) => (
-                    <CalendarRow
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      updating={updating === item.id}
-                      onUpdate={updateCalendarItem}
-                      onCopyCaption={handleCopyCaption}
-                      onOpenComment={openCommentModal}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {calendarData.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="p-4 bg-gray-100 rounded-2xl">
+                            <Calendar className="h-12 w-12 text-gray-400 mx-auto" />
+                          </div>
+                          <div className="text-xl font-semibold text-gray-800">No Content Calendar Yet</div>
+                          <div className="text-gray-600 max-w-md text-center">
+                            {user?.company_name ? (
+                              `Welcome to ${user.company_name}! Your content calendar will appear here once content is added.`
+                            ) : (
+                              'Your content calendar will appear here once content is added.'
+                            )}
+                          </div>
+                          <button
+                            onClick={() => window.location.reload()}
+                            className="mt-4 px-6 py-3 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-600)] text-white rounded-xl hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] transition-all duration-200 font-semibold"
+                          >
+                            Refresh
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    calendarData.map((item, index) => (
+                      <CalendarRow
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        updating={updating === item.id}
+                        onUpdate={updateCalendarItem}
+                        onCopyCaption={handleCopyCaption}
+                        onOpenComment={openCommentModal}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
       {/* CSV Upload Modal */}
       {uploadModal && (
-        <div className="fixed inset-0  bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">📤 Upload CSV File</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Upload className="h-5 w-5 text-[var(--secondary)]" />
+                Upload CSV File
+              </h3>
               <button
                 onClick={() => setUploadModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
                 disabled={uploading}
               >
-                ✕
+                <ArrowRight className="h-5 w-5 transform rotate-45" />
               </button>
             </div>
-            
+
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-3">
                 Upload a CSV file with your content calendar data. The parser is flexible and supports various column names:
@@ -768,7 +1114,7 @@ export default function DashboardPage() {
                 </a>
               </div>
             </div>
-            
+
             <div className="mb-6">
               <input
                 type="file"
@@ -783,7 +1129,7 @@ export default function DashboardPage() {
                 className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-gray-400 focus:outline-none focus:border-blue-500"
               />
             </div>
-            
+
             {uploading && (
               <div className="flex flex-col items-center justify-center space-y-3 text-blue-600 bg-blue-50 p-4 rounded-lg">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -795,7 +1141,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setUploadModal(false)}
@@ -812,17 +1158,20 @@ export default function DashboardPage() {
       {/* Comment Modal */}
       {commentModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">💬 Comments</h3>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-[var(--primary)]" />
+                Comments
+              </h3>
               <button
                 onClick={() => setCommentModal({ isOpen: false, itemId: '', comments: [], newComment: '' })}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                ✕
+                <ArrowRight className="h-5 w-5 transform rotate-45" />
               </button>
             </div>
-            
+
             {/* Existing Comments */}
             {commentModal.comments.length > 0 && (
               <div className="mb-4">
@@ -830,35 +1179,34 @@ export default function DashboardPage() {
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {commentModal.comments.map((comment, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg border">
-                      <p className="text-sm text-background">{comment}</p>
+                      <p className="text-sm text-gray-900">{comment}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            
+
             {/* Add New Comment */}
             <div>
               <h4 className="text-sm font-semibold text-gray-800 mb-2">Add New Comment:</h4>
               <textarea
                 value={commentModal.newComment}
                 onChange={(e) => setCommentModal(prev => ({ ...prev, newComment: e.target.value }))}
-                className="w-full h-32 p-3 border border-gray-300 text-background rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full h-32 p-3 border border-gray-300 text-gray-900 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Enter your comment or feedback..."
               />
             </div>
-            
+
             <div className="flex justify-end space-x-3 mt-4">
               <button
                 onClick={() => setCommentModal({ isOpen: false, itemId: '', comments: [], newComment: '' })}
-                className="px-4 py-2 text-background bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="px-4 py-2 text-gray-900 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
                 Cancel
               </button>
               <button
                 onClick={addComment}
-                className="px-4 py-2 text-white rounded-lg hover:opacity-90"
-                style={{ backgroundColor: user?.brand_color || '#3B82F6' }}
+                className={`px-4 py-2 text-white rounded-lg hover:opacity-90 ${`text-[${user?.brand_color || '#5843BE'}]`}`}
                 disabled={!commentModal.newComment.trim()}
               >
                 Add Comment
@@ -867,24 +1215,103 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      </div>
+
+      {/* OneDrive Link Management Modal */}
+      {linkModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Link className="h-5 w-5 text-[var(--primary)]" />
+                Configure OneDrive Link
+              </h3>
+              <button
+                onClick={() => setLinkModal({ isOpen: false, type: null, currentLink: '' })}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <ArrowRight className="h-5 w-5 transform rotate-45" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Enter the OneDrive link for{' '}
+                <span className="font-semibold text-gray-900">
+                  {linkModal.type === 'team_review' && 'Team Review Files'}
+                  {linkModal.type === 'client_dropoff' && 'Client Dropoff Files'}
+                  {linkModal.type === 'ready_schedule' && 'Ready to Schedule Files'}
+                  {linkModal.type === 'status_report' && 'Status Report Files'}
+                </span>
+              </p>
+              <input
+                type="url"
+                value={linkModal.currentLink}
+                onChange={(e) => setLinkModal(prev => ({ ...prev, currentLink: e.target.value }))}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] text-gray-900 placeholder-gray-500"
+                placeholder="https://onedrive.live.com/..."
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setLinkModal({ isOpen: false, type: null, currentLink: '' })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveLinkUpdate}
+                disabled={!linkModal.currentLink.trim()}
+                className="px-4 py-2 bg-gradient-to-r from-[var(--primary)] to-[var(--primary-600)] text-white rounded-xl hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                Save Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Status Modal */}
+      {updateModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-200 text-center">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="p-3 bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)] rounded-2xl">
+                {updateModal.message.includes('successfully') ? (
+                  <CheckCircle className="h-8 w-8 text-white" />
+                ) : (
+                  <Loader2 className="h-8 w-8 text-white animate-spin" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  {updateModal.message.includes('successfully') ? 'Success!' : 'Updating...'}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {updateModal.message}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </ClientBranding>
   )
 }
 
 // Calendar Row Component
-function CalendarRow({ 
-  item, 
-  index, 
-  updating, 
-  onUpdate, 
-  onCopyCaption, 
-  onOpenComment 
+function CalendarRow({
+  item,
+  index,
+  updating,
+  onUpdate,
+  onCopyCaption,
+  onOpenComment
 }: {
   item: ContentCalendarItem
   index: number
   updating: boolean
-  onUpdate: (id: string, updates: Partial<ContentCalendarItem>) => void
+  onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
   onCopyCaption: (copy: string) => void
   onOpenComment: (itemId: string, comments: string[]) => void
 }) {
@@ -895,7 +1322,7 @@ function CalendarRow({
       Google: 'bg-blue-500',
       Stories: 'bg-purple-600'
     }
-    
+
     return platforms.map(platform => (
       <span
         key={platform}
@@ -946,25 +1373,25 @@ function CalendarRow({
         <div className="text-xs text-gray-500">{item.day}</div>
         {item.is_new && <span className="inline-block bg-red-500 text-white text-xs px-2 py-1 rounded mt-1">NEW</span>}
       </td>
-      
+
       <td className="px-4 py-4">
         <div className="flex flex-wrap gap-1">
           {getPlatformTags(item.platform)}
         </div>
       </td>
-      
+
       <td className="px-4 py-4">
         <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full uppercase ${getTypeStyle(item.type)}`}>
           {item.type}
         </span>
       </td>
-      
+
       <td className="px-4 py-4">
         <select
           value={item.team_status}
-          onChange={(e) => onUpdate(item.id, { team_status: e.target.value as any })}
+          onChange={(e) => onUpdate(item.id, { team_status: e.target.value as any }, 'team')}
           disabled={updating}
-          className={`w-full px-3 py-2 text-sm font-semibold border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${getStatusStyle(item.team_status, 'team')}`}
+          className={`w-full px-3 py-2 text-sm font-semibold border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${getStatusStyle(item.team_status, 'team')}`}
         >
           <option value="not-started">Not Started</option>
           <option value="in-progress">In Progress</option>
@@ -972,11 +1399,11 @@ function CalendarRow({
           <option value="ready-post">Ready to Post</option>
         </select>
       </td>
-      
+
       <td className="px-4 py-4">
         <select
           value={item.client_status}
-          onChange={(e) => onUpdate(item.id, { client_status: e.target.value as any })}
+          onChange={(e) => onUpdate(item.id, { client_status: e.target.value as any }, 'client')}
           disabled={updating}
           className={`w-full px-3 py-2 text-sm font-semibold border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${getStatusStyle(item.client_status, 'client')}`}
         >
@@ -986,14 +1413,14 @@ function CalendarRow({
           <option value="needs-changes">Needs Changes</option>
         </select>
       </td>
-      
+
       <td className="px-4 py-4">
-        <div className="font-semibold text-background text-sm">{item.hook}</div>
+        <div className="font-semibold text-gray-900 text-sm">{item.hook}</div>
       </td>
-      
+
       <td className="px-4 py-4 max-w-md">
         <div className="flex items-start justify-between mb-2">
-          <span className="text-sm text-background font-semibold">Caption:</span>
+          <span className="text-sm text-gray-900 font-semibold">Caption:</span>
           <button
             onClick={() => onCopyCaption(item.copy)}
             className="flex items-center space-x-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
@@ -1002,48 +1429,43 @@ function CalendarRow({
             <span>Copy</span>
           </button>
         </div>
-        <div className="max-h-32 overflow-y-auto text-background p-3 bg-gray-50 rounded text-sm border">
+        <div className="max-h-32 overflow-y-auto text-gray-900 p-3 bg-gray-50 rounded text-sm border">
           {item.copy.split('\n').map((line, i) => (
             <div key={i}>{line}</div>
           ))}
         </div>
       </td>
-      
+
       <td className="px-4 py-4 max-w-md">
         <div className="space-y-3">
           <div>
-            <div className="text-xs text-background font-semibold mb-1">Prompt 1:</div>
-            <div className="max-h-20 overflow-y-auto text-background p-2 bg-blue-50 rounded text-xs border">
+            <div className="text-xs text-gray-900 font-semibold mb-1">Prompt 1:</div>
+            <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-blue-50 rounded text-xs border">
               {item.image_prompt_1 || 'No prompt provided'}
             </div>
           </div>
           <div>
-            <div className="text-xs text-background font-semibold mb-1">Prompt 2:</div>
-            <div className="max-h-20 overflow-y-auto text-background p-2 bg-purple-50 rounded text-xs border">
+            <div className="text-xs text-gray-900 font-semibold mb-1">Prompt 2:</div>
+            <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-purple-50 rounded text-xs border">
               {item.image_prompt_2 || 'No prompt provided'}
             </div>
           </div>
         </div>
       </td>
-      
+
       <td className="px-4 py-4">
         <button
           onClick={() => onOpenComment(item.id, item.comments || [])}
-          className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 w-full justify-center"
+          className={`flex items-center space-x-1 px-3 py-2 bg-[#5843BE] text-white text-xs rounded hover:bg-blue-700 w-full justify-center`}
         >
           <MessageCircle className="h-3 w-3" />
           <span>
-            {item.comments && item.comments.length > 0 
-              ? `Comments (${item.comments.length})` 
+            {item.comments && item.comments.length > 0
+              ? `Comments (${item.comments.length})`
               : 'Add Comment'
             }
           </span>
         </button>
-        {updating && (
-          <div className="flex items-center justify-center mt-2">
-            <Loader2 className="h-4 w-4 animate-spin text-green-600" />
-          </div>
-        )}
       </td>
     </tr>
   )
@@ -1059,7 +1481,7 @@ function DashboardSkeleton() {
           <Skeleton className="h-4 w-60" />
         </div>
       </header>
-      
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
           <Skeleton className="h-6 w-64 mb-6" />
@@ -1076,7 +1498,7 @@ function DashboardSkeleton() {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map(i => (

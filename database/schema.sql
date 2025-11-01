@@ -4,9 +4,13 @@ CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   company_name TEXT NOT NULL,
-  brand_color TEXT DEFAULT '#3B82F6',
+  brand_color TEXT DEFAULT '#5843BE',
   logo_url TEXT,
   industry TEXT,
+  onedrive_team_review_link TEXT,
+  onedrive_client_dropoff_link TEXT,
+  onedrive_ready_schedule_link TEXT,
+  onedrive_status_report_link TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -65,7 +69,7 @@ BEGIN
     NEW.id, 
     NEW.email, 
     COALESCE(NEW.raw_user_meta_data->>'company_name', 'My Company'),
-    '#3B82F6'
+    '#5843BE'
   );
   RETURN NEW;
 END;

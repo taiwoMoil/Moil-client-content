@@ -531,6 +531,18 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
+"@paper-design/shaders-react@^0.0.61":
+  version "0.0.61"
+  resolved "https://registry.yarnpkg.com/@paper-design/shaders-react/-/shaders-react-0.0.61.tgz#92e9eea54d2975033a4bbac533b0786a2cb93fa2"
+  integrity sha512-VrV/PbOX6R81cV4/Ynlxh/DvstZhDMVFplXI8Iupb9EioXJQJDAg/CSmacj7ktKYOnsnFxeuWFnwEggJlAhS4A==
+  dependencies:
+    "@paper-design/shaders" "0.0.61"
+
+"@paper-design/shaders@0.0.61":
+  version "0.0.61"
+  resolved "https://registry.yarnpkg.com/@paper-design/shaders/-/shaders-0.0.61.tgz#b1f40ad7ee50db0ff844e1ecad3f511c6b2087ba"
+  integrity sha512-1TLuNRwTfWTYT9pIEnKC9D0sJfMrdHklMH4coj1zzlv0wabSFdAQzFi1Uu1724/LEp25VbN5EcF7nRYa6Xg6VQ==
+
 "@rtsao/scc@^1.1.0":
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/@rtsao/scc/-/scc-1.1.0.tgz#927dd2fae9bc3361403ac2c7a00c32ddce9ad7e8"
