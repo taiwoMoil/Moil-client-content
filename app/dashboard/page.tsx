@@ -82,7 +82,11 @@ export default function DashboardPage() {
       const result = await response.json()
 
       if (response.ok) {
-        setCalendarData(result.data || [])
+        // Sort the data by date to ensure proper chronological order
+        const sortedData = (result.data || []).sort((a: ContentCalendarItem, b: ContentCalendarItem) => {
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        })
+        setCalendarData(sortedData)
       } else {
         // Handle different error types
         if (response.status === 404) {
@@ -421,8 +425,13 @@ export default function DashboardPage() {
       if (response.ok) {
         const result = await response.json()
 
+        // Sort the data by date before setting it
+        const sortedData = (result.data || []).sort((a: ContentCalendarItem, b: ContentCalendarItem) => {
+          return new Date(a.date).getTime() - new Date(b.date).getTime()
+        })
+
         // Update the calendar data with the new items
-        setCalendarData(result.data || [])
+        setCalendarData(sortedData)
         setUploadModal(false)
 
         // Show success message with details

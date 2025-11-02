@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
       .from('content_calendars')
       .insert(calendarItems)
       .select()
+      .order('date', { ascending: true })
 
     console.log(calendar);
 
