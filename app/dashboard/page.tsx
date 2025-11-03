@@ -1215,7 +1215,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={addComment}
-                className={`px-4 py-2 text-white rounded-lg hover:opacity-90 ${`text-[${user?.brand_color || '#5843BE'}]`}`}
+                className="px-4 py-2 text-white rounded-lg hover:opacity-90 bg-[#5843BE]"
                 disabled={!commentModal.newComment.trim()}
               >
                 Add Comment
