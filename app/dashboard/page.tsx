@@ -228,6 +228,43 @@ export default function DashboardPage() {
     }
   }
 
+  const deleteComment = async (commentIndex: number) => {
+    if (commentModal.itemId && commentIndex >= 0 && commentIndex < commentModal.comments.length) {
+      // Show comment update modal
+      setUpdateModal({
+        isOpen: true,
+        message: 'Deleting comment...',
+        type: 'comment'
+      })
+
+      const updatedComments = commentModal.comments.filter((_, index) => index !== commentIndex)
+      
+      try {
+        await updateCalendarItem(commentModal.itemId, { comments: updatedComments })
+        
+        // Show success message
+        setUpdateModal({
+          isOpen: true,
+          message: 'Comment deleted successfully!',
+          type: 'comment'
+        })
+        
+        // Update the modal state with the new comments
+        setCommentModal(prev => ({
+          ...prev,
+          comments: updatedComments
+        }))
+        
+        // Auto-close after 1.5 seconds
+        setTimeout(() => {
+          setUpdateModal({ isOpen: false, message: '', type: null })
+        }, 1500)
+      } catch (err) {
+        setUpdateModal({ isOpen: false, message: '', type: null })
+      }
+    }
+  }
+
   const getStatusCounts = () => {
     const teamCounts = {
       'not-started': 0,
@@ -1187,8 +1224,19 @@ export default function DashboardPage() {
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">Previous Comments:</h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {commentModal.comments.map((comment, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg border">
-                      <p className="text-sm text-gray-900">{comment}</p>
+                    <div key={index} className="p-3 bg-gray-50 rounded-lg border group hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-gray-900 flex-1">{comment}</p>
+                        <button
+                          onClick={() => deleteComment(index)}
+                          className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-all duration-200"
+                          title="Delete comment"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
