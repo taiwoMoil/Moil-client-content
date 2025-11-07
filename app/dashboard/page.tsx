@@ -7,7 +7,7 @@ import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
-import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon } from 'lucide-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -1372,6 +1372,48 @@ function CalendarRow({
   onCopyCaption: (copy: string) => void
   onOpenComment: (itemId: string, comments: string[]) => void
 }) {
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState({
+    hook: item.hook,
+    copy: item.copy,
+    image_prompt_1: item.image_prompt_1,
+    image_prompt_2: item.image_prompt_2
+  })
+
+  const handleEditStart = (field: string) => {
+    setEditingField(field)
+    setEditValues({
+      hook: item.hook,
+      copy: item.copy,
+      image_prompt_1: item.image_prompt_1,
+      image_prompt_2: item.image_prompt_2
+    })
+  }
+
+  const handleEditCancel = () => {
+    setEditingField(null)
+    setEditValues({
+      hook: item.hook,
+      copy: item.copy,
+      image_prompt_1: item.image_prompt_1,
+      image_prompt_2: item.image_prompt_2
+    })
+  }
+
+  const handleEditSave = async (field: string) => {
+    const updates: Partial<ContentCalendarItem> = {}
+    updates[field as keyof ContentCalendarItem] = editValues[field as keyof typeof editValues] as any
+    
+    await onUpdate(item.id, updates)
+    setEditingField(null)
+  }
+
+  const handleInputChange = (field: string, value: string) => {
+    setEditValues(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
   const getPlatformTags = (platforms: string[]) => {
     const colors = {
       IG: 'bg-pink-500',
@@ -1472,40 +1514,202 @@ function CalendarRow({
       </td>
 
       <td className="px-4 py-4">
-        <div className="font-semibold text-gray-900 text-sm">{item.hook}</div>
+        {editingField === 'hook' ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editValues.hook}
+              onChange={(e) => handleInputChange('hook', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-[#0a0a0a]"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleEditSave('hook')}
+                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                disabled={updating}
+              >
+                <Save className="h-3 w-3" />
+                Save
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                disabled={updating}
+              >
+                <X className="h-3 w-3" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="group flex items-center justify-between">
+            <div className="font-semibold text-gray-900 text-sm flex-1">{item.hook}</div>
+            <button
+              onClick={() => handleEditStart('hook')}
+              className="opacity-0 group-hover:opacity-100 ml-2 p-1.5 text-black hover:text-blue-600 transition-all"
+              title="Edit hook"
+            >
+              <Edit3 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </td>
 
       <td className="px-4 py-4 max-w-md">
-        <div className="flex items-start justify-between mb-2">
-          <span className="text-sm text-gray-900 font-semibold">Caption:</span>
-          <button
-            onClick={() => onCopyCaption(item.copy)}
-            className="flex items-center space-x-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-          >
-            <Copy className="h-3 w-3" />
-            <span>Copy</span>
-          </button>
-        </div>
-        <div className="max-h-32 overflow-y-auto text-gray-900 p-3 bg-gray-50 rounded text-sm border">
-          {item.copy.split('\n').map((line, i) => (
-            <div key={i}>{line}</div>
-          ))}
-        </div>
+        {editingField === 'copy' ? (
+          <div className="space-y-2">
+            <div className="text-sm text-gray-900 font-semibold mb-2">Caption:</div>
+            <textarea
+              value={editValues.copy}
+              onChange={(e) => handleInputChange('copy', e.target.value)}
+              className="w-full h-32 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-[#0a0a0a]"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleEditSave('copy')}
+                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                disabled={updating}
+              >
+                <Save className="h-3 w-3" />
+                Save
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                disabled={updating}
+              >
+                <X className="h-3 w-3" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="group">
+            <div className="flex items-start justify-between mb-2">
+              <span className="text-sm text-gray-900 font-semibold">Caption:</span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => onCopyCaption(item.copy)}
+                  className="flex items-center space-x-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                >
+                  <Copy className="h-3 w-3" />
+                  <span>Copy</span>
+                </button>
+                <button
+                  onClick={() => handleEditStart('copy')}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
+                  title="Edit caption"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="max-h-32 overflow-y-auto text-gray-900 p-3 bg-gray-50 rounded text-sm border">
+              {item.copy.split('\n').map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          </div>
+        )}
       </td>
 
       <td className="px-4 py-4 max-w-md">
         <div className="space-y-3">
-          <div>
-            <div className="text-xs text-gray-900 font-semibold mb-1">Prompt 1:</div>
-            <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-blue-50 rounded text-xs border">
-              {item.image_prompt_1 || 'No prompt provided'}
-            </div>
+          <div className="group">
+            {editingField === 'image_prompt_1' ? (
+              <div className="space-y-2">
+                <div className="text-xs text-gray-900 font-semibold mb-1">Prompt 1:</div>
+                <textarea
+                  value={editValues.image_prompt_1}
+                  onChange={(e) => handleInputChange('image_prompt_1', e.target.value)}
+                  className="w-full h-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-[#0a0a0a]"
+                  autoFocus
+                />
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleEditSave('image_prompt_1')}
+                    className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    disabled={updating}
+                  >
+                    <Save className="h-2 w-2" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleEditCancel}
+                    className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                    disabled={updating}
+                  >
+                    <X className="h-2 w-2" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-gray-900 font-semibold">Prompt 1:</div>
+                  <button
+                    onClick={() => handleEditStart('image_prompt_1')}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
+                    title="Edit prompt 1"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-blue-50 rounded text-xs border">
+                  {item.image_prompt_1 || 'No prompt provided'}
+                </div>
+              </div>
+            )}
           </div>
-          <div>
-            <div className="text-xs text-gray-900 font-semibold mb-1">Prompt 2:</div>
-            <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-purple-50 rounded text-xs border">
-              {item.image_prompt_2 || 'No prompt provided'}
-            </div>
+          <div className="group">
+            {editingField === 'image_prompt_2' ? (
+              <div className="space-y-2">
+                <div className="text-xs text-gray-900 font-semibold mb-1">Prompt 2:</div>
+                <textarea
+                  value={editValues.image_prompt_2}
+                  onChange={(e) => handleInputChange('image_prompt_2', e.target.value)}
+                  className="w-full h-20 px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-[#0a0a0a]"
+                  autoFocus
+                />
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleEditSave('image_prompt_2')}
+                    className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    disabled={updating}
+                  >
+                    <Save className="h-2 w-2" />
+                    Save
+                  </button>
+                  <button
+                    onClick={handleEditCancel}
+                    className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                    disabled={updating}
+                  >
+                    <X className="h-2 w-2" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs text-gray-900 font-semibold">Prompt 2:</div>
+                  <button
+                    onClick={() => handleEditStart('image_prompt_2')}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
+                    title="Edit prompt 2"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-purple-50 rounded text-xs border">
+                  {item.image_prompt_2 || 'No prompt provided'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </td>
