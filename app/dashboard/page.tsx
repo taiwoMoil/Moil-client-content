@@ -7,7 +7,7 @@ import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
-import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus } from 'lucide-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2 } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -38,6 +38,17 @@ export default function DashboardPage() {
   })
   const [uploading, setUploading] = useState(false)
   const [uploadModal, setUploadModal] = useState(false)
+  const [insertModal, setInsertModal] = useState(false)
+  const [selectedDate, setSelectedDate] = useState('')
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    itemId: string;
+    itemDate: string;
+  }>({
+    isOpen: false,
+    itemId: '',
+    itemDate: ''
+  })
   const [linkModal, setLinkModal] = useState<{
     isOpen: boolean;
     type: 'team_review' | 'client_dropoff' | 'ready_schedule' | 'status_report' | null;
@@ -330,12 +341,60 @@ export default function DashboardPage() {
 
   const { teamCounts, clientCounts } = getStatusCounts()
 
-  // Insert Empty Row Function
-  const insertEmptyRow = async () => {
+  // Show Delete Confirmation Modal
+  const showDeleteModal = (id: string, date: string) => {
+    setDeleteModal({
+      isOpen: true,
+      itemId: id,
+      itemDate: date
+    })
+  }
+
+  // Delete Row Function
+  const deleteCalendarItem = async () => {
     try {
+      const url = getApiUrl(`/api/calendar/${deleteModal.itemId}`)
+      const response = await fetch(url, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setCalendarData(prev => prev.filter(item => item.id !== deleteModal.itemId))
+        
+        // Close delete modal
+        setDeleteModal({ isOpen: false, itemId: '', itemDate: '' })
+        
+        // Show success message
+        setUpdateModal({
+          isOpen: true,
+          message: 'Calendar item deleted successfully!',
+          type: 'team'
+        })
+        
+        // Auto-hide after 2 seconds
+        setTimeout(() => {
+          setUpdateModal({ isOpen: false, message: '', type: null })
+        }, 2000)
+      } else {
+        const error = await response.json()
+        alert(`Failed to delete item: ${error.error}`)
+      }
+    } catch (err) {
+      console.error('Delete error:', err)
+      alert('Failed to delete item. Please try again.')
+    }
+  }
+
+  // Insert Empty Row Function
+  const insertEmptyRow = async (selectedDate: string) => {
+    try {
+      const date = new Date(selectedDate)
+      const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' })
+      
       const newItem = {
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), // Format: "Dec 9"
-        day: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+        date: formattedDate,
+        day: dayName,
         platform: ['Instagram'], // Default platform
         type: 'Post', // Default type
         hook: 'Add your engaging hook here...',
@@ -364,6 +423,9 @@ export default function DashboardPage() {
           const updated = [...prev, result.data]
           return updated.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
         })
+        
+        setInsertModal(false)
+        setSelectedDate('')
         
         // Show success message
         setUpdateModal({
@@ -1094,7 +1156,7 @@ export default function DashboardPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
-                  onClick={insertEmptyRow}
+                  onClick={() => setInsertModal(true)}
                   className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm"
                 >
                   <div className="p-2 bg-white/20 rounded-lg">
@@ -1246,6 +1308,7 @@ export default function DashboardPage() {
                         onUpdate={updateCalendarItem}
                         onCopyCaption={handleCopyCaption}
                         onOpenComment={openCommentModal}
+                        onDelete={showDeleteModal}
                       />
                     ))
                   )}
@@ -1488,6 +1551,115 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Insert Row Modal */}
+      {insertModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Plus className="h-5 w-5 text-green-600" />
+                Add New Calendar Item
+              </h3>
+              <button
+                onClick={() => setInsertModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Select a date for your new calendar item. The item will be created with helpful prompts that you can edit.
+              </p>
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-gray-900"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setInsertModal(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => selectedDate && insertEmptyRow(selectedDate)}
+                disabled={!selectedDate}
+                className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
+                Create Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-600" />
+                Delete Calendar Item
+              </h3>
+              <button
+                onClick={() => setDeleteModal({ isOpen: false, itemId: '', itemDate: '' })}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-red-800">
+                    This action cannot be undone
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">
+                    The calendar item will be permanently deleted from your account.
+                  </p>
+                </div>
+              </div>
+              
+              <p className="text-sm text-gray-600">
+                Are you sure you want to delete the calendar item for{' '}
+                <span className="font-semibold text-gray-900">{deleteModal.itemDate}</span>?
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteModal({ isOpen: false, itemId: '', itemDate: '' })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteCalendarItem}
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ClientBranding>
   )
 }
@@ -1499,7 +1671,8 @@ function CalendarRow({
   updating,
   onUpdate,
   onCopyCaption,
-  onOpenComment
+  onOpenComment,
+  onDelete
 }: {
   item: ContentCalendarItem
   index: number
@@ -1507,6 +1680,7 @@ function CalendarRow({
   onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
   onCopyCaption: (copy: string) => void
   onOpenComment: (itemId: string, comments: string[]) => void
+  onDelete: (id: string, date: string) => void
 }) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({
@@ -2039,18 +2213,28 @@ function CalendarRow({
       </td>
 
       <td className="px-4 py-4">
-        <button
-          onClick={() => onOpenComment(item.id, item.comments || [])}
-          className={`flex items-center space-x-1 px-3 py-2 bg-[#5843BE] text-white text-xs rounded hover:bg-blue-700 w-full justify-center`}
-        >
-          <MessageCircle className="h-3 w-3" />
-          <span>
-            {item.comments && item.comments.length > 0
-              ? `Comments (${item.comments.length})`
-              : 'Add Comment'
-            }
-          </span>
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={() => onOpenComment(item.id, item.comments || [])}
+            className={`flex items-center space-x-1 px-3 py-2 bg-[#5843BE] text-white text-xs rounded hover:bg-blue-700 w-full justify-center`}
+          >
+            <MessageCircle className="h-3 w-3" />
+            <span>
+              {item.comments && item.comments.length > 0
+                ? `Comments (${item.comments.length})`
+                : 'Add Comment'
+              }
+            </span>
+          </button>
+          <button
+            onClick={() => onDelete(item.id, item.date)}
+            className="flex items-center space-x-1 px-3 py-2 bg-red-600 text-white text-xs rounded hover:bg-red-700 w-full justify-center"
+            title="Delete this item"
+          >
+            <Trash2 className="h-3 w-3" />
+            <span>Delete</span>
+          </button>
+        </div>
       </td>
     </tr>
   )
