@@ -18,11 +18,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No items provided' }, { status: 400 })
     }
 
-    // First, clear existing calendar data for this user
+    // Check if admin is bulk uploading for a specific client
+    const { searchParams } = new URL(request.url)
+    const clientId = searchParams.get('client_id')
+    
+    let targetUserId = user.id
+
+    if (clientId) {
+      // Verify current user is admin
+      const { data: adminProfile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!adminProfile || adminProfile.role !== 'admin') {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+      }
+
+      // Verify target client exists
+      const { data: clientProfile } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', clientId)
+        .eq('role', 'client')
+        .single()
+
+      if (!clientProfile) {
+        return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+      }
+
+      targetUserId = clientId
+    }
+
+    // First, clear existing calendar data for the target user
     const { error: deleteError } = await supabase
       .from('content_calendars')
       .delete()
-      .eq('user_id', user.id)
+      .eq('user_id', targetUserId)
     
     if (deleteError) {
       console.error('Error clearing existing data:', deleteError)
@@ -32,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Prepare items with user_id and timestamps
     const calendarItems = items.map(item => ({
       ...item,
-      user_id: user.id,
+      user_id: targetUserId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }))

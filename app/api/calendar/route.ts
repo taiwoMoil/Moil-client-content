@@ -6,16 +6,60 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    console.log(user)
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Check if admin is requesting data for a specific client
+    const { searchParams } = new URL(request.url)
+    console.log(searchParams)
+    const clientId = searchParams.get('client_id')
+    console.log(clientId)
+    
+    let targetUserId = user.id
+
+    if (clientId) {
+      // Verify current user is admin
+      const { data: adminProfile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!adminProfile || adminProfile.role !== 'admin') {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+      }
+
+      // Verify target client exists
+      const { data: clientProfile } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', clientId)
+        .eq('role', 'client')
+        .single()
+
+      console.log(clientProfile)
+
+      if (!clientProfile) {
+        return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+      }
+
+      targetUserId = clientId
+    }
+
+    console.log(targetUserId)
+
     const { data: calendar, error } = await supabase
       .from('content_calendars')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', targetUserId)
       .order('date', { ascending: true })
+
+    console.log(calendar)
+    console.log(error)
 
     if (error) {
       // Handle table not found error gracefully
@@ -46,9 +90,42 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     
+    // Check if admin is creating content for a specific client
+    const { searchParams } = new URL(request.url)
+    const clientId = searchParams.get('client_id')
+    
+    let targetUserId = user.id
+
+    if (clientId) {
+      // Verify current user is admin
+      const { data: adminProfile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (!adminProfile || adminProfile.role !== 'admin') {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+      }
+
+      // Verify target client exists
+      const { data: clientProfile } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', clientId)
+        .eq('role', 'client')
+        .single()
+
+      if (!clientProfile) {
+        return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+      }
+
+      targetUserId = clientId
+    }
+    
     const { data: calendar, error } = await supabase
       .from('content_calendars')
-      .insert([{ ...body, user_id: user.id }])
+      .insert([{ ...body, user_id: targetUserId }])
       .select()
       .single()
 

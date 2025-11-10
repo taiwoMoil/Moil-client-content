@@ -1,7 +1,8 @@
 'use client'
 
 import { User } from '@/lib/types/database'
-import { Calendar, Settings, BarChart3, LogOut, Building2, User as UserIcon, Bell, Search } from 'lucide-react'
+import { Calendar, Settings, BarChart3, LogOut, Building2, User as UserIcon, Bell, Search, Shield } from 'lucide-react'
+import Link from 'next/link'
 
 interface ClientBrandingProps {
   user: User | null
@@ -155,6 +156,15 @@ export function ClientHeader({ user, userEmail, onLogout }: ClientHeaderProps) {
                 <Calendar className="h-4 w-4" />
                 <span>Calendar</span>
               </button>
+              {user.role === 'admin' && !sessionStorage.getItem('admin_impersonate_client') && (
+                <Link 
+                  href="/admin"
+                  className="flex items-center gap-2 px-4 py-2 text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg font-medium text-sm transition-colors"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span>Admin</span>
+                </Link>
+              )}
             </nav>
 
             {/* User Section */}

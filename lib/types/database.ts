@@ -9,6 +9,7 @@ export interface Database {
           brand_color: string
           logo_url: string | null
           industry: string | null
+          role: 'client' | 'admin'
           onedrive_team_review_link: string | null
           onedrive_client_dropoff_link: string | null
           onedrive_ready_schedule_link: string | null
@@ -23,6 +24,7 @@ export interface Database {
           brand_color?: string
           logo_url?: string | null
           industry?: string | null
+          role?: 'client' | 'admin'
           onedrive_team_review_link?: string | null
           onedrive_client_dropoff_link?: string | null
           onedrive_ready_schedule_link?: string | null
@@ -37,6 +39,7 @@ export interface Database {
           brand_color?: string
           logo_url?: string | null
           industry?: string | null
+          role?: 'client' | 'admin'
           onedrive_team_review_link?: string | null
           onedrive_client_dropoff_link?: string | null
           onedrive_ready_schedule_link?: string | null

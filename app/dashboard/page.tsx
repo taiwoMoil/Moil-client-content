@@ -7,7 +7,7 @@ import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
-import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X } from 'lucide-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -61,6 +61,34 @@ export default function DashboardPage() {
   const getUser = async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser()
     if (authUser) {
+      // Check if admin is impersonating a client
+      const impersonateClientId = sessionStorage.getItem('admin_impersonate_client')
+      
+      if (impersonateClientId) {
+        // Verify current user is admin and fetch impersonated client data
+        const { data: adminProfile } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', authUser.id)
+          .single()
+
+        if (adminProfile?.role === 'admin') {
+          // Fetch the client being impersonated
+          const { data: clientProfile } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', impersonateClientId)
+            .single()
+
+          if (clientProfile) {
+            setUser(clientProfile)
+            return
+          }
+        }
+        // Clear invalid impersonation
+        sessionStorage.removeItem('admin_impersonate_client')
+      }
+
       // Fetch full user profile - user IS the client now
       const { data: userProfile } = await supabase
         .from('users')
@@ -76,9 +104,20 @@ export default function DashboardPage() {
     }
   }
 
+  // Helper function to get API URL with client_id if admin is impersonating
+  const getApiUrl = (endpoint: string) => {
+    const impersonateClientId = sessionStorage.getItem('admin_impersonate_client')
+    if (impersonateClientId) {
+      const separator = endpoint.includes('?') ? '&' : '?'
+      return `${endpoint}${separator}client_id=${impersonateClientId}`
+    }
+    return endpoint
+  }
+
   const fetchCalendarData = async () => {
     try {
-      const response = await fetch('/api/calendar')
+      const url = getApiUrl('/api/calendar')
+      const response = await fetch(url)
       const result = await response.json()
 
       if (response.ok) {
@@ -128,7 +167,8 @@ export default function DashboardPage() {
     }
 
     try {
-      const response = await fetch(`/api/calendar/${id}`, {
+      const url = getApiUrl(`/api/calendar/${id}`)
+      const response = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -289,6 +329,62 @@ export default function DashboardPage() {
   }
 
   const { teamCounts, clientCounts } = getStatusCounts()
+
+  // Insert Empty Row Function
+  const insertEmptyRow = async () => {
+    try {
+      const newItem = {
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), // Format: "Dec 9"
+        day: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+        platform: ['Instagram'], // Default platform
+        type: 'Post', // Default type
+        hook: 'Add your engaging hook here...',
+        copy: 'Write your compelling copy here...',
+        kpi: 'Define your KPI (likes, shares, comments, etc.)',
+        image_prompt_1: 'Describe your first image idea here...',
+        image_prompt_2: 'Describe your second image idea here...',
+        team_status: 'not-started',
+        client_status: 'not-submitted',
+        comments: [],
+        is_new: true
+      }
+
+      const url = getApiUrl('/api/calendar')
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newItem),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setCalendarData(prev => {
+          const updated = [...prev, result.data]
+          return updated.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        })
+        
+        // Show success message
+        setUpdateModal({
+          isOpen: true,
+          message: 'New calendar item added with helpful prompts! Edit the placeholders to add your content.',
+          type: 'team'
+        })
+        
+        // Auto-hide after 2 seconds
+        setTimeout(() => {
+          setUpdateModal({ isOpen: false, message: '', type: null })
+        }, 2000)
+      } else {
+        const error = await response.json()
+        alert(`Failed to add new row: ${error.error}`)
+      }
+    } catch (err) {
+      console.error('Insert row error:', err)
+      alert('Failed to add new row. Please try again.')
+    }
+  }
 
   // CSV Upload Function
   const handleCSVUpload = async (file: File) => {
@@ -451,7 +547,8 @@ export default function DashboardPage() {
       }).filter(item => item.date && item.hook) // Only include rows with date and hook
 
       // Upload to database
-      const response = await fetch('/api/calendar/bulk', {
+      const url = getApiUrl('/api/calendar/bulk')
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -665,6 +762,27 @@ export default function DashboardPage() {
           userEmail={user?.email || ''}
           onLogout={handleLogout}
         />
+
+        {/* Admin Impersonation Banner */}
+        {sessionStorage.getItem('admin_impersonate_client') && (
+          <div className="bg-orange-500 text-white px-4 py-3 text-center relative">
+            <div className="flex items-center justify-center gap-2">
+              <UserIcon className="h-4 w-4" />
+              <span className="font-medium">
+                Admin Mode: Viewing {user?.company_name}'s dashboard
+              </span>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem('admin_impersonate_client')
+                  router.push('/admin')
+                }}
+                className="ml-4 px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-sm font-medium transition-colors"
+              >
+                Exit & Return to Admin
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="max-w-full text-background mx-auto px-4 py-8">
           {/* Workflow Guide */}
@@ -974,7 +1092,19 @@ export default function DashboardPage() {
                 </div>
                 <h4 className="text-lg font-semibold text-gray-900">File Management</h4>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <button
+                  onClick={insertEmptyRow}
+                  className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm"
+                >
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <Plus className="h-5 w-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold">Insert Row</div>
+                    <div className="text-sm opacity-90">Add new empty item</div>
+                  </div>
+                </button>
                 <button
                   onClick={() => setUploadModal(true)}
                   className="flex items-center gap-3 p-4 bg-gradient-to-r from-[var(--secondary)] to-[var(--secondary-600)] text-white rounded-xl hover:from-[var(--secondary-600)] hover:to-[var(--secondary-700)] transition-all duration-200 shadow-sm"
@@ -1059,6 +1189,12 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4" />
                         <span>Caption</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left font-semibold w-48">
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" />
+                        <span>KPI</span>
                       </div>
                     </th>
                     <th className="px-6 py-4 text-left font-semibold w-72">
@@ -1374,8 +1510,13 @@ function CalendarRow({
 }) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({
+    date: item.date,
+    day: item.day,
+    platform: item.platform,
+    type: item.type,
     hook: item.hook,
     copy: item.copy,
+    kpi: item.kpi,
     image_prompt_1: item.image_prompt_1,
     image_prompt_2: item.image_prompt_2
   })
@@ -1383,8 +1524,13 @@ function CalendarRow({
   const handleEditStart = (field: string) => {
     setEditingField(field)
     setEditValues({
+      date: item.date,
+      day: item.day,
+      platform: item.platform,
+      type: item.type,
       hook: item.hook,
       copy: item.copy,
+      kpi: item.kpi,
       image_prompt_1: item.image_prompt_1,
       image_prompt_2: item.image_prompt_2
     })
@@ -1393,8 +1539,13 @@ function CalendarRow({
   const handleEditCancel = () => {
     setEditingField(null)
     setEditValues({
+      date: item.date,
+      day: item.day,
+      platform: item.platform,
+      type: item.type,
       hook: item.hook,
       copy: item.copy,
+      kpi: item.kpi,
       image_prompt_1: item.image_prompt_1,
       image_prompt_2: item.image_prompt_2
     })
@@ -1402,13 +1553,20 @@ function CalendarRow({
 
   const handleEditSave = async (field: string) => {
     const updates: Partial<ContentCalendarItem> = {}
-    updates[field as keyof ContentCalendarItem] = editValues[field as keyof typeof editValues] as any
+    
+    if (field === 'date') {
+      // When saving date, also save the day
+      updates.date = editValues.date
+      updates.day = editValues.day
+    } else {
+      updates[field as keyof ContentCalendarItem] = editValues[field as keyof typeof editValues] as any
+    }
     
     await onUpdate(item.id, updates)
     setEditingField(null)
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     setEditValues(prev => ({
       ...prev,
       [field]: value
@@ -1468,21 +1626,147 @@ function CalendarRow({
   return (
     <tr className={`${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'} hover:bg-green-50 transition-colors border-b border-gray-200`}>
       <td className="px-4 py-4">
-        <div className="font-bold text-green-700">{item.date}</div>
-        <div className="text-xs text-gray-500">{item.day}</div>
-        {item.is_new && <span className="inline-block bg-red-500 text-white text-xs px-2 py-1 rounded mt-1">NEW</span>}
+        {editingField === 'date' ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editValues.date}
+              onChange={(e) => handleInputChange('date', e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-[#0a0a0a]"
+              placeholder="Dec 9"
+              autoFocus
+            />
+            <input
+              type="text"
+              value={editValues.day}
+              onChange={(e) => handleInputChange('day', e.target.value)}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-[#0a0a0a]"
+              placeholder="Monday"
+            />
+            <div className="flex gap-1">
+              <button
+                onClick={() => handleEditSave('date')}
+                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                disabled={updating}
+              >
+                <Save className="h-3 w-3" />
+                Save
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                disabled={updating}
+              >
+                <X className="h-3 w-3" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="group cursor-pointer" onClick={() => handleEditStart('date')}>
+            <div className="font-bold text-green-700">{item.date}</div>
+            <div className="text-xs text-gray-500">{item.day}</div>
+            <div className="opacity-0 group-hover:opacity-100 text-xs text-blue-600 mt-1">Click to edit</div>
+            {item.is_new && <span className="inline-block bg-red-500 text-white text-xs px-2 py-1 rounded mt-1">NEW</span>}
+          </div>
+        )}
       </td>
 
       <td className="px-4 py-4">
-        <div className="flex flex-wrap gap-1">
-          {getPlatformTags(item.platform)}
-        </div>
+        {editingField === 'platform' ? (
+          <div className="space-y-2">
+            <div className="space-y-1">
+              {['Instagram', 'Facebook', 'Google', 'Stories', 'LinkedIn', 'Twitter', 'TikTok', 'YouTube'].map(platform => (
+                <label key={platform} className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editValues.platform.includes(platform)}
+                    onChange={(e) => {
+                      const newPlatforms = e.target.checked
+                        ? [...editValues.platform, platform]
+                        : editValues.platform.filter(p => p !== platform)
+                      handleInputChange('platform', newPlatforms)
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-[#0a0a0a]">{platform}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => handleEditSave('platform')}
+                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                disabled={updating}
+              >
+                <Save className="h-3 w-3" />
+                Save
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                disabled={updating}
+              >
+                <X className="h-3 w-3" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="group cursor-pointer" onClick={() => handleEditStart('platform')}>
+            <div className="flex flex-wrap gap-1">
+              {getPlatformTags(item.platform)}
+            </div>
+            <div className="opacity-0 group-hover:opacity-100 text-xs text-blue-600 mt-1">Click to edit</div>
+          </div>
+        )}
       </td>
 
       <td className="px-4 py-4">
-        <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full uppercase ${getTypeStyle(item.type)}`}>
-          {item.type}
-        </span>
+        {editingField === 'type' ? (
+          <div className="space-y-2">
+            <select
+              value={editValues.type}
+              onChange={(e) => handleInputChange('type', e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-[#0a0a0a]"
+              autoFocus
+            >
+              <option value="Post">Post</option>
+              <option value="Reel">Reel</option>
+              <option value="Carousel">Carousel</option>
+              <option value="Photo">Photo</option>
+              <option value="Testimonial">Testimonial</option>
+              <option value="Education">Education</option>
+              <option value="Offer">Offer</option>
+              <option value="Promo">Promo</option>
+            </select>
+            <div className="flex gap-1">
+              <button
+                onClick={() => handleEditSave('type')}
+                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                disabled={updating}
+              >
+                <Save className="h-3 w-3" />
+                Save
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                disabled={updating}
+              >
+                <X className="h-3 w-3" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="group cursor-pointer" onClick={() => handleEditStart('type')}>
+            <span className={`inline-block px-3 py-1 text-xs font-semibold rounded-full uppercase ${getTypeStyle(item.type)}`}>
+              {item.type}
+            </span>
+            <div className="opacity-0 group-hover:opacity-100 text-xs text-blue-600 mt-1">Click to edit</div>
+          </div>
+        )}
       </td>
 
       <td className="px-4 py-4">
@@ -1611,6 +1895,46 @@ function CalendarRow({
                 <div key={i}>{line}</div>
               ))}
             </div>
+          </div>
+        )}
+      </td>
+
+      <td className="px-4 py-4">
+        {editingField === 'kpi' ? (
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={editValues.kpi}
+              onChange={(e) => handleInputChange('kpi', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-[#0a0a0a]"
+              placeholder="Define your KPI..."
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleEditSave('kpi')}
+                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                disabled={updating}
+              >
+                <Save className="h-3 w-3" />
+                Save
+              </button>
+              <button
+                onClick={handleEditCancel}
+                className="flex items-center gap-1 px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                disabled={updating}
+              >
+                <X className="h-3 w-3" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="group cursor-pointer" onClick={() => handleEditStart('kpi')}>
+            <div className="text-sm text-gray-900 p-3 bg-gray-50 rounded border min-h-[2.5rem] flex items-center">
+              {item.kpi || 'Click to add KPI...'}
+            </div>
+            <div className="opacity-0 group-hover:opacity-100 text-xs text-blue-600 mt-1">Click to edit</div>
           </div>
         )}
       </td>

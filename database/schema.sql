@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   brand_color TEXT DEFAULT '#5843BE',
   logo_url TEXT,
   industry TEXT,
+  role TEXT NOT NULL DEFAULT 'client' CHECK (role IN ('client', 'admin')),
   onedrive_team_review_link TEXT,
   onedrive_client_dropoff_link TEXT,
   onedrive_ready_schedule_link TEXT,
@@ -60,16 +61,74 @@ CREATE POLICY "Users can update own calendar items" ON public.content_calendars
 CREATE POLICY "Users can delete own calendar items" ON public.content_calendars
   FOR DELETE USING (auth.uid() = user_id);
 
+-- Admin policies for users table
+CREATE POLICY "Admins can view all users" ON public.users
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can update all users" ON public.users
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Admin policies for content_calendars table
+CREATE POLICY "Admins can view all calendar items" ON public.content_calendars
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can insert calendar items for any user" ON public.content_calendars
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can update all calendar items" ON public.content_calendars
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can delete all calendar items" ON public.content_calendars
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM public.users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
 -- Create function to handle user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  user_role TEXT := 'client';
 BEGIN
-  INSERT INTO public.users (id, email, company_name, brand_color)
+  -- Check if email ends with @moilapp.com to assign admin role
+  IF NEW.email LIKE '%@moilapp.com' THEN
+    user_role := 'admin';
+  END IF;
+
+  INSERT INTO public.users (id, email, company_name, brand_color, role)
   VALUES (
     NEW.id, 
     NEW.email, 
     COALESCE(NEW.raw_user_meta_data->>'company_name', 'My Company'),
-    '#5843BE'
+    '#5843BE',
+    user_role
   );
   RETURN NEW;
 END;
