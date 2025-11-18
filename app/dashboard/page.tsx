@@ -255,6 +255,26 @@ export default function DashboardPage() {
       try {
         await updateCalendarItem(commentModal.itemId, { comments: updatedComments })
         
+        // Send email notification
+        try {
+          const response = await fetch('/api/notifications/comment', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              calendarItemId: commentModal.itemId,
+              comment: commentModal.newComment.trim(),
+            }),
+          })
+          
+          if (!response.ok) {
+            console.warn('Email notification failed:', await response.text())
+          }
+        } catch (emailError) {
+          console.warn('Failed to send email notification:', emailError)
+        }
+        
         // Show success message
         setUpdateModal({
           isOpen: true,
