@@ -7,7 +7,7 @@ import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
-import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2 } from 'lucide-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2, Sparkles } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -57,6 +57,17 @@ export default function DashboardPage() {
     isOpen: false,
     type: null,
     currentLink: ''
+  })
+  const [imageModal, setImageModal] = useState<{
+    isOpen: boolean;
+    imageUrl: string;
+    prompt: string;
+    loading: boolean;
+  }>({
+    isOpen: false,
+    imageUrl: '',
+    prompt: '',
+    loading: false
   })
 
   const router = useRouter()
@@ -402,6 +413,54 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Delete error:', err)
       alert('Failed to delete item. Please try again.')
+    }
+  }
+
+  // Generate Image Function
+  const generateImage = async (prompt: string) => {
+    setImageModal({
+      isOpen: true,
+      imageUrl: '',
+      prompt,
+      loading: true
+    })
+
+    try {
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setImageModal({
+          isOpen: true,
+          imageUrl: data.imageUrl,
+          prompt,
+          loading: false
+        })
+      } else {
+        const error = await response.json()
+        alert(`Failed to generate image: ${error.error}`)
+        setImageModal({
+          isOpen: false,
+          imageUrl: '',
+          prompt: '',
+          loading: false
+        })
+      }
+    } catch (err) {
+      console.error('Image generation error:', err)
+      alert('Failed to generate image. Please try again.')
+      setImageModal({
+        isOpen: false,
+        imageUrl: '',
+        prompt: '',
+        loading: false
+      })
     }
   }
 
@@ -1329,6 +1388,7 @@ export default function DashboardPage() {
                         onCopyCaption={handleCopyCaption}
                         onOpenComment={openCommentModal}
                         onDelete={showDeleteModal}
+                        onGenerateImage={generateImage}
                       />
                     ))
                   )}
@@ -1680,6 +1740,62 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Image Generation Modal */}
+      {imageModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-600" />
+                Generated Image
+              </h3>
+              <button
+                onClick={() => setImageModal({ isOpen: false, imageUrl: '', prompt: '', loading: false })}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                <span className="font-semibold text-gray-900">Prompt:</span> {imageModal.prompt}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center bg-gray-50 rounded-xl p-8 min-h-[400px]">
+              {imageModal.loading ? (
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="h-12 w-12 text-purple-600 animate-spin" />
+                  <p className="text-sm text-gray-600">Generating your image...</p>
+                </div>
+              ) : imageModal.imageUrl ? (
+                <img
+                  src={imageModal.imageUrl}
+                  alt="Generated image"
+                  className="max-w-full max-h-[500px] rounded-lg shadow-lg"
+                />
+              ) : (
+                <p className="text-sm text-gray-500">No image generated</p>
+              )}
+            </div>
+
+            {!imageModal.loading && imageModal.imageUrl && (
+              <div className="mt-6 flex justify-end space-x-3">
+                <a
+                  href={imageModal.imageUrl}
+                  download="generated-image.png"
+                  className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all duration-200 flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Image
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </ClientBranding>
   )
 }
@@ -1692,7 +1808,8 @@ function CalendarRow({
   onUpdate,
   onCopyCaption,
   onOpenComment,
-  onDelete
+  onDelete,
+  onGenerateImage
 }: {
   item: ContentCalendarItem
   index: number
@@ -1701,6 +1818,7 @@ function CalendarRow({
   onCopyCaption: (copy: string) => void
   onOpenComment: (itemId: string, comments: string[]) => void
   onDelete: (id: string, date: string) => void
+  onGenerateImage: (prompt: string) => void
 }) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({
@@ -2168,13 +2286,23 @@ function CalendarRow({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-xs text-gray-900 font-semibold">Prompt 1:</div>
-                  <button
-                    onClick={() => handleEditStart('image_prompt_1')}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
-                    title="Edit prompt 1"
-                  >
-                    <Edit3 className="h-3 w-3" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => onGenerateImage(item.image_prompt_1)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-purple-600 hover:text-purple-700 transition-all"
+                      title="Generate image from prompt 1"
+                      disabled={!item.image_prompt_1 || item.image_prompt_1.includes('Describe your')}
+                    >
+                      <Sparkles className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => handleEditStart('image_prompt_1')}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
+                      title="Edit prompt 1"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
                 <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-blue-50 rounded text-xs border">
                   {item.image_prompt_1 || 'No prompt provided'}
@@ -2215,13 +2343,23 @@ function CalendarRow({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-xs text-gray-900 font-semibold">Prompt 2:</div>
-                  <button
-                    onClick={() => handleEditStart('image_prompt_2')}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
-                    title="Edit prompt 2"
-                  >
-                    <Edit3 className="h-3 w-3" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => onGenerateImage(item.image_prompt_2)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-purple-600 hover:text-purple-700 transition-all"
+                      title="Generate image from prompt 2"
+                      disabled={!item.image_prompt_2 || item.image_prompt_2.includes('Describe your')}
+                    >
+                      <Sparkles className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => handleEditStart('image_prompt_2')}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
+                      title="Edit prompt 2"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
                 <div className="max-h-20 overflow-y-auto text-gray-900 p-2 bg-purple-50 rounded text-xs border">
                   {item.image_prompt_2 || 'No prompt provided'}
