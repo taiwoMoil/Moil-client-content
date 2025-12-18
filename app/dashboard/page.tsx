@@ -7,7 +7,7 @@ import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
-import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2, Sparkles } from 'lucide-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2, Sparkles, RefreshCw } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -68,6 +68,23 @@ export default function DashboardPage() {
     imageUrl: '',
     prompt: '',
     loading: false
+  })
+  const [regenerateModal, setRegenerateModal] = useState<{
+    isOpen: boolean;
+    itemId: string;
+    contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2' | null;
+    currentContent: string;
+    corrections: string[];
+    loading: boolean;
+    context: ContentCalendarItem | null;
+  }>({
+    isOpen: false,
+    itemId: '',
+    contentType: null,
+    currentContent: '',
+    corrections: [],
+    loading: false,
+    context: null
   })
 
   const router = useRouter()
@@ -413,6 +430,102 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Delete error:', err)
       alert('Failed to delete item. Please try again.')
+    }
+  }
+
+  // Open Regenerate Modal
+  const openRegenerateModal = (
+    itemId: string, 
+    contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2',
+    currentContent: string,
+    context: ContentCalendarItem
+  ) => {
+    setRegenerateModal({
+      isOpen: true,
+      itemId,
+      contentType,
+      currentContent,
+      corrections: [],
+      loading: false,
+      context
+    })
+  }
+
+  // Regenerate Content Function
+  const regenerateContent = async () => {
+    if (!regenerateModal.contentType || !regenerateModal.currentContent) return
+
+    setRegenerateModal(prev => ({ ...prev, loading: true }))
+
+    try {
+      const contentTypeMap = {
+        'hook': 'hook',
+        'caption': 'caption',
+        'image_prompt_1': 'image_prompt',
+        'image_prompt_2': 'image_prompt'
+      }
+
+      // Map contentType to actual database field
+      const fieldMap: Record<string, keyof ContentCalendarItem> = {
+        'hook': 'hook',
+        'caption': 'copy',
+        'image_prompt_1': 'image_prompt_1',
+        'image_prompt_2': 'image_prompt_2'
+      }
+
+      const response = await fetch('/api/regenerate-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentContent: regenerateModal.currentContent,
+          contentType: contentTypeMap[regenerateModal.contentType],
+          corrections: regenerateModal.corrections,
+          context: regenerateModal.context
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Update the calendar item with the regenerated content
+        const fieldToUpdate = fieldMap[regenerateModal.contentType]
+        const updates: Partial<ContentCalendarItem> = {
+          [fieldToUpdate]: data.generatedContent
+        }
+        
+        await updateCalendarItem(regenerateModal.itemId, updates)
+        
+        setRegenerateModal({
+          isOpen: false,
+          itemId: '',
+          contentType: null,
+          currentContent: '',
+          corrections: [],
+          loading: false,
+          context: null
+        })
+
+        // Show success message
+        setUpdateModal({
+          isOpen: true,
+          message: 'Content regenerated successfully!',
+          type: 'team'
+        })
+        
+        setTimeout(() => {
+          setUpdateModal({ isOpen: false, message: '', type: null })
+        }, 2000)
+      } else {
+        const error = await response.json()
+        alert(`Failed to regenerate content: ${error.error}`)
+        setRegenerateModal(prev => ({ ...prev, loading: false }))
+      }
+    } catch (err) {
+      console.error('Regenerate error:', err)
+      alert('Failed to regenerate content. Please try again.')
+      setRegenerateModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -1389,6 +1502,7 @@ export default function DashboardPage() {
                         onOpenComment={openCommentModal}
                         onDelete={showDeleteModal}
                         onGenerateImage={generateImage}
+                        onRegenerateContent={openRegenerateModal}
                       />
                     ))
                   )}
@@ -1796,6 +1910,115 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Regenerate Content Modal */}
+      {regenerateModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <RefreshCw className="h-5 w-5 text-blue-600" />
+                Regenerate Content
+              </h3>
+              <button
+                onClick={() => setRegenerateModal({
+                  isOpen: false,
+                  itemId: '',
+                  contentType: null,
+                  currentContent: '',
+                  corrections: [],
+                  loading: false,
+                  context: null
+                })}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+                disabled={regenerateModal.loading}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-sm font-medium text-blue-900 mb-1">
+                  Current {regenerateModal.contentType === 'caption' ? 'Caption' : 
+                           regenerateModal.contentType === 'hook' ? 'Hook' : 'Image Prompt'}:
+                </p>
+                <p className="text-xs text-blue-700 max-h-20 overflow-y-auto">
+                  {regenerateModal.currentContent}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  What needs to be corrected? (Optional)
+                </label>
+                
+                <div className="space-y-2">
+                  {[
+                    'Make it more engaging',
+                    'Simplify the language',
+                    'Add more details',
+                    'Make it shorter',
+                    'Make it more professional',
+                    'Add emojis/hashtags'
+                  ].map((correction) => (
+                    <label key={correction} className="flex items-center space-x-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={regenerateModal.corrections.includes(correction)}
+                        onChange={(e) => {
+                          const newCorrections = e.target.checked
+                            ? [...regenerateModal.corrections, correction]
+                            : regenerateModal.corrections.filter(c => c !== correction)
+                          setRegenerateModal(prev => ({ ...prev, corrections: newCorrections }))
+                        }}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        disabled={regenerateModal.loading}
+                      />
+                      <span className="text-gray-700">{correction}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setRegenerateModal({
+                  isOpen: false,
+                  itemId: '',
+                  contentType: null,
+                  currentContent: '',
+                  corrections: [],
+                  loading: false,
+                  context: null
+                })}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                disabled={regenerateModal.loading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={regenerateContent}
+                disabled={regenerateModal.loading}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center gap-2"
+              >
+                {regenerateModal.loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Regenerate
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ClientBranding>
   )
 }
@@ -1809,7 +2032,8 @@ function CalendarRow({
   onCopyCaption,
   onOpenComment,
   onDelete,
-  onGenerateImage
+  onGenerateImage,
+  onRegenerateContent
 }: {
   item: ContentCalendarItem
   index: number
@@ -1819,6 +2043,7 @@ function CalendarRow({
   onOpenComment: (itemId: string, comments: string[]) => void
   onDelete: (id: string, date: string) => void
   onGenerateImage: (prompt: string) => void
+  onRegenerateContent: (itemId: string, contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2', currentContent: string, context: ContentCalendarItem) => void
 }) {
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValues, setEditValues] = useState({
@@ -2141,13 +2366,23 @@ function CalendarRow({
         ) : (
           <div className="group flex items-center justify-between">
             <div className="font-semibold text-gray-900 text-sm flex-1">{item.hook}</div>
-            <button
-              onClick={() => handleEditStart('hook')}
-              className="opacity-0 group-hover:opacity-100 ml-2 p-1.5 text-black hover:text-blue-600 transition-all"
-              title="Edit hook"
-            >
-              <Edit3 className="h-3 w-3" />
-            </button>
+            <div className="flex gap-1">
+              <button
+                onClick={() => onRegenerateContent(item.id, 'hook', item.hook, item)}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-blue-600 hover:text-blue-700 transition-all"
+                title="Regenerate hook"
+                disabled={!item.hook || item.hook.includes('Add your engaging')}
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => handleEditStart('hook')}
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
+                title="Edit hook"
+              >
+                <Edit3 className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         )}
       </td>
@@ -2187,18 +2422,26 @@ function CalendarRow({
               <span className="text-sm text-gray-900 font-semibold">Caption:</span>
               <div className="flex gap-1">
                 <button
+                  onClick={() => onRegenerateContent(item.id, 'caption', item.copy, item)}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-blue-600 hover:text-blue-700 transition-all"
+                  title="Regenerate caption"
+                  disabled={!item.copy || item.copy.includes('Write your compelling')}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </button>
+                <button
                   onClick={() => onCopyCaption(item.copy)}
-                  className="flex items-center space-x-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-green-600 hover:text-green-700 transition-all"
+                  title="Copy caption"
                 >
                   <Copy className="h-3 w-3" />
-                  <span>Copy</span>
                 </button>
                 <button
                   onClick={() => handleEditStart('copy')}
                   className="opacity-0 group-hover:opacity-100 p-1.5 text-black hover:text-blue-600 transition-all"
                   title="Edit caption"
                 >
-                  <Edit3 className="h-4 w-4" />
+                  <Edit3 className="h-3 w-3" />
                 </button>
               </div>
             </div>
@@ -2288,6 +2531,14 @@ function CalendarRow({
                   <div className="text-xs text-gray-900 font-semibold">Prompt 1:</div>
                   <div className="flex gap-1">
                     <button
+                      onClick={() => onRegenerateContent(item.id, 'image_prompt_1', item.image_prompt_1, item)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-blue-600 hover:text-blue-700 transition-all"
+                      title="Regenerate prompt 1"
+                      disabled={!item.image_prompt_1 || item.image_prompt_1.includes('Describe your')}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                    </button>
+                    <button
                       onClick={() => onGenerateImage(item.image_prompt_1)}
                       className="opacity-0 group-hover:opacity-100 p-1.5 text-purple-600 hover:text-purple-700 transition-all"
                       title="Generate image from prompt 1"
@@ -2344,6 +2595,14 @@ function CalendarRow({
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-xs text-gray-900 font-semibold">Prompt 2:</div>
                   <div className="flex gap-1">
+                    <button
+                      onClick={() => onRegenerateContent(item.id, 'image_prompt_2', item.image_prompt_2, item)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-blue-600 hover:text-blue-700 transition-all"
+                      title="Regenerate prompt 2"
+                      disabled={!item.image_prompt_2 || item.image_prompt_2.includes('Describe your')}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                    </button>
                     <button
                       onClick={() => onGenerateImage(item.image_prompt_2)}
                       className="opacity-0 group-hover:opacity-100 p-1.5 text-purple-600 hover:text-purple-700 transition-all"
