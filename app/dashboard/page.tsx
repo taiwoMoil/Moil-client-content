@@ -7,7 +7,7 @@ import { ContentCalendarItem, User } from '@/lib/types/database'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
-import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2, Sparkles, RefreshCw } from 'lucide-react'
+import { Download, Copy, MessageCircle, Loader2, Upload, ExternalLink, Calendar, Users, BarChart3, Settings, Link, AlertCircle, CheckCircle, Clock, ArrowRight, Workflow, FileText, Image, Hash, UserIcon, Edit3, Save, X, Plus, Trash2, Sparkles, RefreshCw, ChevronLeft, ChevronRight, LayoutGrid, Table as TableIcon } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
 export default function DashboardPage() {
@@ -86,6 +86,16 @@ export default function DashboardPage() {
     loading: false,
     context: null
   })
+
+  // View mode: 'calendar' grid (default) or original 'table'
+  const [viewMode, setViewMode] = useState<'calendar' | 'table'>('calendar')
+  // Anchor date for the visible month in calendar view (first of month)
+  const [viewMonth, setViewMonth] = useState<Date>(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
+  // Selected day for the right-side drawer (null = closed)
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null)
 
   const router = useRouter()
   const supabase = createClient()
@@ -388,6 +398,49 @@ export default function DashboardPage() {
   }
 
   const { teamCounts, clientCounts } = getStatusCounts()
+
+  // Parse a stored item.date (e.g. "May 5" or "2026-05-05") into a Date.
+  // Items stored without a year are anchored to the currently viewed month's
+  // year so they don't drift across years.
+  const parseItemDate = (raw: string, fallbackYear: number): Date | null => {
+    if (!raw) return null
+    const direct = new Date(raw)
+    if (!isNaN(direct.getTime())) {
+      // If the original string had no 4-digit year, normalize to fallback year
+      const hasYear = /\b\d{4}\b/.test(raw)
+      if (!hasYear) {
+        return new Date(fallbackYear, direct.getMonth(), direct.getDate())
+      }
+      return direct
+    }
+    return null
+  }
+
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  // Group items by day within the currently visible month
+  const itemsByDay: Record<string, ContentCalendarItem[]> = {}
+  const monthsPresent = new Set<string>()
+  calendarData.forEach(item => {
+    const d = parseItemDate(item.date, viewMonth.getFullYear())
+    if (!d) return
+    monthsPresent.add(`${d.getFullYear()}-${d.getMonth()}`)
+    if (d.getFullYear() === viewMonth.getFullYear() && d.getMonth() === viewMonth.getMonth()) {
+      const k = dayKey(d)
+      ;(itemsByDay[k] ||= []).push(item)
+    }
+  })
+
+  // Sorted list of months that contain data, for the month chips
+  const monthChips = Array.from(monthsPresent)
+    .map(k => {
+      const [y, m] = k.split('-').map(Number)
+      return new Date(y, m, 1)
+    })
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  const selectedDayItems = selectedDayKey ? itemsByDay[selectedDayKey] || [] : []
 
   // Show Delete Confirmation Modal
   const showDeleteModal = (id: string, date: string) => {
@@ -1388,17 +1441,101 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Calendar Table */}
+          {/* Calendar Section */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl card-shadow-lg border border-gray-200 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)]"></div>
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-6 border-b border-gray-200 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)] rounded-lg">
                   <Calendar className="h-6 w-6 text-white" />
                 </div>
                 <h3 className="text-2xl font-bold text-[var(--primary)]">Content Calendar</h3>
               </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                {viewMode === 'calendar' && (
+                  <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
+                    <button
+                      onClick={() => setViewMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
+                      className="p-1.5 rounded-md hover:bg-gray-100 text-gray-700"
+                      aria-label="Previous month"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        const n = new Date()
+                        setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1))
+                      }}
+                      className="px-3 py-1.5 text-sm font-semibold text-gray-800 min-w-[10rem] text-center"
+                    >
+                      {viewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </button>
+                    <button
+                      onClick={() => setViewMonth(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
+                      className="p-1.5 rounded-md hover:bg-gray-100 text-gray-700"
+                      aria-label="Next month"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('calendar')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'calendar' ? 'bg-white text-[var(--primary)] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                    Calendar
+                  </button>
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'table' ? 'bg-white text-[var(--primary)] shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  >
+                    <TableIcon className="h-4 w-4" />
+                    Table
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {viewMode === 'calendar' && monthChips.length > 0 && (
+              <div className="px-6 pt-4 pb-2 flex flex-wrap items-center gap-2 border-b border-gray-100">
+                <span className="text-xs uppercase tracking-wide text-gray-500 mr-1">Months with content:</span>
+                {monthChips.map(m => {
+                  const active = m.getFullYear() === viewMonth.getFullYear() && m.getMonth() === viewMonth.getMonth()
+                  return (
+                    <button
+                      key={`${m.getFullYear()}-${m.getMonth()}`}
+                      onClick={() => setViewMonth(new Date(m.getFullYear(), m.getMonth(), 1))}
+                      className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${active ? 'bg-[var(--primary)] text-white border-[var(--primary)]' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                    >
+                      {m.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {viewMode === 'calendar' ? (
+              <div className="p-6">
+                <MonthGrid
+                  viewMonth={viewMonth}
+                  itemsByDay={itemsByDay}
+                  onSelectDay={setSelectedDayKey}
+                />
+                {Object.keys(itemsByDay).length === 0 && (
+                  <div className="mt-6 flex flex-col items-center justify-center space-y-3 text-center text-gray-500">
+                    <div className="p-3 bg-gray-100 rounded-2xl">
+                      <Calendar className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <div className="text-sm">No content scheduled for {viewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.</div>
+                    <div className="text-xs text-gray-400">Use Insert Row or Upload CSV above to add items. Other months are preserved.</div>
+                  </div>
+                )}
+              </div>
+            ) : (
             <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
               <table className="w-full min-w-[1600px]">
                 <thead className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-600)] text-white sticky top-0 z-10">
@@ -1509,7 +1646,28 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
+
+          {/* Day Drawer */}
+          {selectedDayKey && (
+            <DayDrawer
+              dayKey={selectedDayKey}
+              items={selectedDayItems}
+              onClose={() => setSelectedDayKey(null)}
+              updatingId={updating}
+              onUpdate={updateCalendarItem}
+              onCopyCaption={handleCopyCaption}
+              onOpenComment={openCommentModal}
+              onDelete={showDeleteModal}
+              onGenerateImage={generateImage}
+              onRegenerateContent={openRegenerateModal}
+              onAddForDay={(d) => {
+                setSelectedDate(d)
+                setInsertModal(true)
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -1543,6 +1701,9 @@ export default function DashboardPage() {
                 <li><strong>Status:</strong> Automatically validates and corrects invalid values</li>
                 <li><strong>Comments:</strong> Comments, Notes, or Note</li>
               </ul>
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                <strong>Heads up:</strong> Uploading replaces existing rows <em>only for the months present in your CSV</em>. Other months stay intact.
+              </div>
               <div className="mt-3">
                 <a
                   href="/sample-calendar.csv"
@@ -2654,6 +2815,738 @@ function CalendarRow({
         </div>
       </td>
     </tr>
+  )
+}
+
+// ---------- Month Grid ----------
+const PLATFORM_DOT_COLORS: Record<string, string> = {
+  Instagram: 'bg-pink-500',
+  Facebook: 'bg-blue-500',
+  Google: 'bg-yellow-500',
+  Stories: 'bg-purple-500',
+  LinkedIn: 'bg-sky-600',
+  Twitter: 'bg-slate-700',
+  TikTok: 'bg-black',
+  YouTube: 'bg-red-500',
+}
+
+const CLIENT_STATUS_BORDER: Record<string, string> = {
+  'not-submitted': 'border-l-gray-300',
+  'under-review': 'border-l-purple-500',
+  'approved': 'border-l-green-500',
+  'needs-changes': 'border-l-red-500',
+}
+
+function MonthGrid({
+  viewMonth,
+  itemsByDay,
+  onSelectDay,
+}: {
+  viewMonth: Date
+  itemsByDay: Record<string, ContentCalendarItem[]>
+  onSelectDay: (k: string) => void
+}) {
+  const year = viewMonth.getFullYear()
+  const month = viewMonth.getMonth()
+  const firstOfMonth = new Date(year, month, 1)
+  const startWeekday = firstOfMonth.getDay() // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+  // Build a 6-row x 7-col grid (always 42 cells)
+  const cells: Array<{ date: Date; inMonth: boolean }> = []
+  // Leading days from previous month
+  for (let i = startWeekday - 1; i >= 0; i--) {
+    cells.push({ date: new Date(year, month, -i), inMonth: false })
+  }
+  // Days in current month
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ date: new Date(year, month, d), inMonth: true })
+  }
+  // Trailing days
+  while (cells.length < 42) {
+    const last = cells[cells.length - 1].date
+    cells.push({ date: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), inMonth: false })
+  }
+
+  const today = new Date()
+  const isToday = (d: Date) =>
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+
+  const key = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {weekdayLabels.map(w => (
+          <div key={w} className="text-xs font-semibold text-gray-500 text-center py-2">
+            {w}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((c, i) => {
+          const k = key(c.date)
+          const items = c.inMonth ? itemsByDay[k] || [] : []
+          const hasItems = items.length > 0
+          return (
+            <button
+              key={i}
+              onClick={() => c.inMonth && hasItems && onSelectDay(k)}
+              disabled={!c.inMonth}
+              className={`group relative text-left rounded-lg border min-h-[110px] p-2 transition-all ${
+                c.inMonth
+                  ? hasItems
+                    ? 'bg-white border-gray-200 hover:border-[var(--primary)] hover:shadow-md cursor-pointer'
+                    : 'bg-gray-50 border-gray-100 cursor-default'
+                  : 'bg-gray-50/40 border-transparent text-gray-300 cursor-default'
+              } ${isToday(c.date) && c.inMonth ? 'ring-2 ring-[var(--primary)]/40' : ''}`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className={`text-sm font-semibold ${
+                    isToday(c.date) && c.inMonth
+                      ? 'inline-flex items-center justify-center w-6 h-6 rounded-full bg-[var(--primary)] text-white'
+                      : c.inMonth
+                      ? 'text-gray-800'
+                      : 'text-gray-300'
+                  }`}
+                >
+                  {c.date.getDate()}
+                </span>
+                {hasItems && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[var(--primary)]/10 text-[var(--primary)] rounded-full">
+                    {items.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                {items.slice(0, 3).map(it => {
+                  const borderColor = CLIENT_STATUS_BORDER[it.client_status] || 'border-l-gray-300'
+                  const primaryPlatform = it.platform?.[0]
+                  const dot = primaryPlatform ? PLATFORM_DOT_COLORS[primaryPlatform] || 'bg-gray-400' : 'bg-gray-400'
+                  return (
+                    <div
+                      key={it.id}
+                      className={`flex items-center gap-1.5 px-1.5 py-1 bg-gray-50 rounded text-[11px] border-l-2 ${borderColor} truncate`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                      <span className="truncate text-gray-700">{it.type}{it.hook ? ` · ${it.hook}` : ''}</span>
+                    </div>
+                  )
+                })}
+                {items.length > 3 && (
+                  <div className="text-[10px] text-gray-500 pl-1">+{items.length - 3} more</div>
+                )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ---------- Day Drawer ----------
+const PLATFORM_OPTIONS = ['Instagram', 'Facebook', 'Google', 'Stories', 'LinkedIn', 'Twitter', 'TikTok', 'YouTube']
+const TYPE_OPTIONS = ['Post', 'Reel', 'Carousel', 'Photo', 'Testimonial', 'Education', 'Offer', 'Promo']
+
+const PLATFORM_BADGE_BG: Record<string, string> = {
+  Instagram: 'bg-pink-500',
+  Facebook: 'bg-blue-600',
+  Google: 'bg-yellow-500',
+  Stories: 'bg-purple-600',
+  LinkedIn: 'bg-sky-600',
+  Twitter: 'bg-slate-700',
+  TikTok: 'bg-black',
+  YouTube: 'bg-red-500',
+}
+
+const TEAM_STATUS_OPTIONS: Array<{ value: ContentCalendarItem['team_status']; label: string; ring: string }> = [
+  { value: 'not-started', label: 'Not Started', ring: 'ring-gray-300' },
+  { value: 'in-progress', label: 'In Progress', ring: 'ring-orange-300' },
+  { value: 'ready-review', label: 'Ready for Review', ring: 'ring-blue-300' },
+  { value: 'ready-post', label: 'Ready to Post', ring: 'ring-green-300' },
+]
+
+const CLIENT_STATUS_OPTIONS: Array<{ value: ContentCalendarItem['client_status']; label: string; ring: string }> = [
+  { value: 'not-submitted', label: 'Not Submitted', ring: 'ring-gray-300' },
+  { value: 'under-review', label: 'Under Review', ring: 'ring-purple-300' },
+  { value: 'approved', label: 'Approved', ring: 'ring-green-300' },
+  { value: 'needs-changes', label: 'Needs Changes', ring: 'ring-red-300' },
+]
+
+function teamStatusPill(status: string) {
+  const map: Record<string, string> = {
+    'not-started': 'bg-gray-100 text-gray-700 border-gray-200',
+    'in-progress': 'bg-orange-100 text-orange-700 border-orange-200',
+    'ready-review': 'bg-blue-100 text-blue-700 border-blue-200',
+    'ready-post': 'bg-green-100 text-green-700 border-green-200',
+  }
+  return map[status] || map['not-started']
+}
+
+function clientStatusPill(status: string) {
+  const map: Record<string, string> = {
+    'not-submitted': 'bg-gray-100 text-gray-700 border-gray-200',
+    'under-review': 'bg-purple-100 text-purple-700 border-purple-200',
+    'approved': 'bg-green-100 text-green-700 border-green-200',
+    'needs-changes': 'bg-red-100 text-red-700 border-red-200',
+  }
+  return map[status] || map['not-submitted']
+}
+
+function DayDrawer({
+  dayKey,
+  items,
+  onClose,
+  updatingId,
+  onUpdate,
+  onCopyCaption,
+  onOpenComment,
+  onDelete,
+  onGenerateImage,
+  onRegenerateContent,
+  onAddForDay,
+}: {
+  dayKey: string
+  items: ContentCalendarItem[]
+  onClose: () => void
+  updatingId: string | null
+  onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
+  onCopyCaption: (copy: string) => void
+  onOpenComment: (itemId: string, comments: string[]) => void
+  onDelete: (id: string, date: string) => void
+  onGenerateImage: (prompt: string) => void
+  onRegenerateContent: (itemId: string, contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2', currentContent: string, context: ContentCalendarItem) => void
+  onAddForDay: (isoDate: string) => void
+}) {
+  const [y, m, d] = dayKey.split('-').map(Number)
+  const dayDate = new Date(y, m - 1, d)
+  const weekday = dayDate.toLocaleDateString('en-US', { weekday: 'long' })
+  const monthDay = dayDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  const yearStr = dayDate.getFullYear()
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div
+        className="flex-1 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden
+      />
+      <aside className="w-full sm:max-w-2xl lg:max-w-3xl bg-gray-50 h-full overflow-y-auto shadow-2xl border-l border-gray-200 flex flex-col">
+        {/* Sticky header */}
+        <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200">
+          <div className="px-6 py-5 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--primary)]">
+                {weekday}
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 leading-tight mt-0.5">
+                {monthDay} <span className="text-gray-400 font-medium">{yearStr}</span>
+              </h2>
+              <div className="text-sm text-gray-500 mt-1">
+                {items.length} {items.length === 1 ? 'activity' : 'activities'} scheduled
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onAddForDay(dayKey)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg bg-[var(--primary)] text-white hover:opacity-90 shadow-sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add activity
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Body */}
+        <div className="flex-1 px-6 py-6 space-y-5">
+          {items.length === 0 ? (
+            <div className="bg-white border border-dashed border-gray-300 rounded-2xl py-16 text-center">
+              <div className="inline-flex p-3 bg-gray-100 rounded-2xl mb-3">
+                <Calendar className="h-7 w-7 text-gray-400" />
+              </div>
+              <div className="text-gray-700 font-medium">Nothing scheduled</div>
+              <div className="text-sm text-gray-500 mt-1">Click "Add activity" to create one for this day.</div>
+            </div>
+          ) : (
+            items.map(item => (
+              <DayItemCard
+                key={item.id}
+                item={item}
+                updating={updatingId === item.id}
+                onUpdate={onUpdate}
+                onCopyCaption={onCopyCaption}
+                onOpenComment={onOpenComment}
+                onDelete={onDelete}
+                onGenerateImage={onGenerateImage}
+                onRegenerateContent={onRegenerateContent}
+              />
+            ))
+          )}
+        </div>
+      </aside>
+    </div>
+  )
+}
+
+// ---------- Day Item Card (vertical, drawer-friendly) ----------
+function DayItemCard({
+  item,
+  updating,
+  onUpdate,
+  onCopyCaption,
+  onOpenComment,
+  onDelete,
+  onGenerateImage,
+  onRegenerateContent,
+}: {
+  item: ContentCalendarItem
+  updating: boolean
+  onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
+  onCopyCaption: (copy: string) => void
+  onOpenComment: (itemId: string, comments: string[]) => void
+  onDelete: (id: string, date: string) => void
+  onGenerateImage: (prompt: string) => void
+  onRegenerateContent: (itemId: string, contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2', currentContent: string, context: ContentCalendarItem) => void
+}) {
+  type EditField = 'hook' | 'copy' | 'kpi' | 'image_prompt_1' | 'image_prompt_2' | null
+  const [editing, setEditing] = useState<EditField>(null)
+  const [draft, setDraft] = useState<string>('')
+
+  const startEdit = (field: Exclude<EditField, null>) => {
+    setEditing(field)
+    setDraft((item[field] as string) || '')
+  }
+  const cancelEdit = () => {
+    setEditing(null)
+    setDraft('')
+  }
+  const saveEdit = async () => {
+    if (!editing) return
+    await onUpdate(item.id, { [editing]: draft } as Partial<ContentCalendarItem>)
+    setEditing(null)
+  }
+
+  const togglePlatform = (p: string) => {
+    const next = item.platform.includes(p)
+      ? item.platform.filter(x => x !== p)
+      : [...item.platform, p]
+    onUpdate(item.id, { platform: next })
+  }
+
+  return (
+    <article className={`bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden ${updating ? 'opacity-70 pointer-events-none' : ''}`}>
+      {/* Card header strip */}
+      <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-white to-gray-50">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            {/* Type pill (editable via select) */}
+            <select
+              value={item.type}
+              onChange={(e) => onUpdate(item.id, { type: e.target.value })}
+              className="px-2.5 py-1 text-xs font-semibold rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30 cursor-pointer"
+            >
+              {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            {/* Platform badges */}
+            <div className="flex flex-wrap items-center gap-1">
+              {item.platform.length === 0 && (
+                <span className="text-xs text-gray-400 italic">No platforms</span>
+              )}
+              {item.platform.map(p => (
+                <span
+                  key={p}
+                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold text-white ${PLATFORM_BADGE_BG[p] || 'bg-gray-500'}`}
+                >
+                  {p}
+                </span>
+              ))}
+            </div>
+
+            {item.is_new && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                NEW
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => onOpenComment(item.id, item.comments || [])}
+              className="relative p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              title="Comments"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {item.comments && item.comments.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-[var(--primary)] text-white text-[9px] font-bold rounded-full h-4 min-w-[1rem] px-1 flex items-center justify-center">
+                  {item.comments.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => onDelete(item.id, item.date)}
+              className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Platform picker (compact, click-to-toggle) */}
+        <details className="mt-3 group">
+          <summary className="list-none cursor-pointer text-xs text-gray-500 hover:text-gray-700 inline-flex items-center gap-1 select-none">
+            <Edit3 className="h-3 w-3" />
+            Edit platforms
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {PLATFORM_OPTIONS.map(p => {
+              const active = item.platform.includes(p)
+              return (
+                <button
+                  key={p}
+                  onClick={() => togglePlatform(p)}
+                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                    active
+                      ? `text-white ${PLATFORM_BADGE_BG[p] || 'bg-gray-500'} border-transparent`
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            })}
+          </div>
+        </details>
+      </div>
+
+      {/* Body sections */}
+      <div className="p-5 space-y-5">
+        <EditableSection
+          label="Hook"
+          icon={<MessageCircle className="h-3.5 w-3.5" />}
+          editing={editing === 'hook'}
+          draft={draft}
+          setDraft={setDraft}
+          onEdit={() => startEdit('hook')}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+          onRegenerate={() => onRegenerateContent(item.id, 'hook', item.hook, item)}
+          value={item.hook}
+          placeholder="Add a scroll-stopping hook..."
+        />
+
+        <EditableSection
+          label="Caption"
+          icon={<FileText className="h-3.5 w-3.5" />}
+          editing={editing === 'copy'}
+          draft={draft}
+          setDraft={setDraft}
+          onEdit={() => startEdit('copy')}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+          onRegenerate={() => onRegenerateContent(item.id, 'caption', item.copy, item)}
+          onCopy={() => onCopyCaption(item.copy)}
+          value={item.copy}
+          multiline
+          placeholder="Write the caption / body copy..."
+        />
+
+        <EditableSection
+          label="KPI"
+          icon={<BarChart3 className="h-3.5 w-3.5" />}
+          editing={editing === 'kpi'}
+          draft={draft}
+          setDraft={setDraft}
+          onEdit={() => startEdit('kpi')}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+          value={item.kpi}
+          placeholder="Define success (likes > 200, 5 DMs, etc.)"
+        />
+
+        {/* Image prompts — side-by-side on desktop, stacked on narrow */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ImagePromptSection
+            label="Image Prompt 1"
+            value={item.image_prompt_1}
+            editing={editing === 'image_prompt_1'}
+            draft={draft}
+            setDraft={setDraft}
+            onEdit={() => startEdit('image_prompt_1')}
+            onSave={saveEdit}
+            onCancel={cancelEdit}
+            onRegenerate={() => onRegenerateContent(item.id, 'image_prompt_1', item.image_prompt_1, item)}
+            onGenerate={() => onGenerateImage(item.image_prompt_1)}
+          />
+          <ImagePromptSection
+            label="Image Prompt 2"
+            value={item.image_prompt_2}
+            editing={editing === 'image_prompt_2'}
+            draft={draft}
+            setDraft={setDraft}
+            onEdit={() => startEdit('image_prompt_2')}
+            onSave={saveEdit}
+            onCancel={cancelEdit}
+            onRegenerate={() => onRegenerateContent(item.id, 'image_prompt_2', item.image_prompt_2, item)}
+            onGenerate={() => onGenerateImage(item.image_prompt_2)}
+          />
+        </div>
+      </div>
+
+      {/* Status footer */}
+      <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/60 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <StatusSelect
+          label="Our Team"
+          icon={<Users className="h-3.5 w-3.5" />}
+          value={item.team_status}
+          options={TEAM_STATUS_OPTIONS}
+          pillClass={teamStatusPill(item.team_status)}
+          onChange={(v) => onUpdate(item.id, { team_status: v as ContentCalendarItem['team_status'] }, 'team')}
+        />
+        <StatusSelect
+          label="Client"
+          icon={<UserIcon className="h-3.5 w-3.5" />}
+          value={item.client_status}
+          options={CLIENT_STATUS_OPTIONS}
+          pillClass={clientStatusPill(item.client_status)}
+          onChange={(v) => onUpdate(item.id, { client_status: v as ContentCalendarItem['client_status'] }, 'client')}
+        />
+      </div>
+    </article>
+  )
+}
+
+function EditableSection({
+  label,
+  icon,
+  value,
+  editing,
+  draft,
+  setDraft,
+  onEdit,
+  onSave,
+  onCancel,
+  onRegenerate,
+  onCopy,
+  multiline,
+  placeholder,
+}: {
+  label: string
+  icon?: React.ReactNode
+  value: string
+  editing: boolean
+  draft: string
+  setDraft: (s: string) => void
+  onEdit: () => void
+  onSave: () => void
+  onCancel: () => void
+  onRegenerate?: () => void
+  onCopy?: () => void
+  multiline?: boolean
+  placeholder?: string
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          {icon}
+          {label}
+        </div>
+        {!editing && (
+          <div className="flex items-center gap-1">
+            {onCopy && (
+              <button onClick={onCopy} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500" title="Copy">
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onRegenerate && (
+              <button onClick={onRegenerate} className="p-1.5 rounded-md hover:bg-blue-50 text-blue-600" title="Regenerate with AI">
+                <Sparkles className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button onClick={onEdit} className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500" title="Edit">
+              <Edit3 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          {multiline ? (
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={5}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 text-gray-900 resize-y"
+              autoFocus
+              placeholder={placeholder}
+            />
+          ) : (
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/40 text-gray-900"
+              autoFocus
+              placeholder={placeholder}
+            />
+          )}
+          <div className="flex items-center gap-2">
+            <button onClick={onSave} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">
+              <Save className="h-3.5 w-3.5" /> Save
+            </button>
+            <button onClick={onCancel} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+              <X className="h-3.5 w-3.5" /> Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={onEdit}
+          className={`text-sm leading-relaxed text-gray-800 px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-lg cursor-text hover:border-gray-300 transition-colors ${multiline ? 'whitespace-pre-wrap' : 'truncate'} ${!value ? 'italic text-gray-400' : ''}`}
+        >
+          {value || placeholder || 'Click to add...'}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ImagePromptSection({
+  label,
+  value,
+  editing,
+  draft,
+  setDraft,
+  onEdit,
+  onSave,
+  onCancel,
+  onRegenerate,
+  onGenerate,
+}: {
+  label: string
+  value: string
+  editing: boolean
+  draft: string
+  setDraft: (s: string) => void
+  onEdit: () => void
+  onSave: () => void
+  onCancel: () => void
+  onRegenerate: () => void
+  onGenerate: () => void
+}) {
+  return (
+    <section className="bg-blue-50/40 border border-blue-100 rounded-xl p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+          <Image className="h-3.5 w-3.5" />
+          {label}
+        </div>
+        {!editing && (
+          <div className="flex items-center gap-1">
+            <button onClick={onGenerate} disabled={!value} className="p-1.5 rounded-md hover:bg-blue-100 text-blue-700 disabled:opacity-40" title="Generate image">
+              <Image className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={onRegenerate} className="p-1.5 rounded-md hover:bg-blue-100 text-blue-700" title="Regenerate prompt">
+              <Sparkles className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={onEdit} className="p-1.5 rounded-md hover:bg-blue-100 text-blue-700" title="Edit">
+              <Edit3 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-900 bg-white"
+            autoFocus
+          />
+          <div className="flex items-center gap-2">
+            <button onClick={onSave} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <Save className="h-3.5 w-3.5" /> Save
+            </button>
+            <button onClick={onCancel} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <X className="h-3.5 w-3.5" /> Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          onClick={onEdit}
+          className={`text-xs leading-relaxed text-gray-800 whitespace-pre-wrap cursor-text bg-white/70 rounded-lg p-2.5 border border-blue-100 min-h-[3rem] ${!value ? 'italic text-gray-400' : ''}`}
+        >
+          {value || 'Describe the image you want...'}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function StatusSelect({
+  label,
+  icon,
+  value,
+  options,
+  pillClass,
+  onChange,
+}: {
+  label: string
+  icon?: React.ReactNode
+  value: string
+  options: Array<{ value: string; label: string }>
+  pillClass: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <label className="block">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+        {icon}
+        {label}
+      </div>
+      <div className={`relative inline-flex w-full items-center rounded-lg border ${pillClass}`}>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="appearance-none bg-transparent w-full pl-3 pr-8 py-2 text-sm font-medium focus:outline-none cursor-pointer"
+        >
+          {options.map(o => (
+            <option key={o.value} value={o.value} className="bg-white text-gray-900">{o.label}</option>
+          ))}
+        </select>
+        <ChevronRight className="h-3.5 w-3.5 absolute right-2 rotate-90 opacity-60 pointer-events-none" />
+      </div>
+    </label>
   )
 }
 
