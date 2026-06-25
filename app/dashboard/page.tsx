@@ -2953,6 +2953,7 @@ function MonthGrid({
           const items = c.inMonth ? itemsByDay[k] || [] : []
           const hasItems = items.length > 0
           const unreadCount = countUnreadForItems(items, reads)
+          const commentCount = items.reduce((sum, it) => sum + (Array.isArray(it.comments) ? it.comments.length : 0), 0)
           return (
             <button
               key={i}
@@ -2978,13 +2979,19 @@ function MonthGrid({
                 >
                   {c.date.getDate()}
                 </span>
-                {unreadCount > 0 && (
+                {commentCount > 0 && (
                   <span
-                    title={`${unreadCount} new comment${unreadCount === 1 ? '' : 's'}`}
-                    className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 bg-red-500 text-white rounded-full"
+                    title={
+                      unreadCount > 0
+                        ? `${unreadCount} new of ${commentCount} comment${commentCount === 1 ? '' : 's'}`
+                        : `${commentCount} comment${commentCount === 1 ? '' : 's'}`
+                    }
+                    className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      unreadCount > 0 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}
                   >
                     <MessageCircle className="w-2.5 h-2.5" />
-                    {unreadCount}
+                    {commentCount}
                   </span>
                 )}
               </div>
