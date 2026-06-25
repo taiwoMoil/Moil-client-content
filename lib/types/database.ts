@@ -1,3 +1,5 @@
+import type { CommentEntry } from '@/lib/comments'
+
 export interface Database {
   public: {
     Tables: {
@@ -64,7 +66,7 @@ export interface Database {
           kpi: string
           image_prompt_1: string
           image_prompt_2: string
-          comments: string[]
+          comments: CommentEntry[]
           created_at: string
           updated_at: string
         }
@@ -83,7 +85,7 @@ export interface Database {
           kpi: string
           image_prompt_1: string
           image_prompt_2: string
-          comments?: string[]
+          comments?: CommentEntry[]
           created_at?: string
           updated_at?: string
         }
@@ -102,7 +104,7 @@ export interface Database {
           kpi?: string
           image_prompt_1?: string
           image_prompt_2?: string
-          comments?: string[]
+          comments?: CommentEntry[]
           created_at?: string
           updated_at?: string
         }

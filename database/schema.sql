@@ -32,14 +32,34 @@ CREATE TABLE IF NOT EXISTS public.content_calendars (
   kpi TEXT NOT NULL,
   image_prompt_1 TEXT NOT NULL,
   image_prompt_2 TEXT NOT NULL,
-  comments TEXT[] DEFAULT '{}',
+  -- JSONB array of comment objects: { id, text, authorRole, createdAt }
+  comments JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Per-viewer comment read tracking (powers the unread badge on the calendar).
+-- Keyed on the authenticated viewer, so an admin reviewing a client's calendar
+-- keeps their own unread state.
+CREATE TABLE IF NOT EXISTS public.content_comment_reads (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  item_id UUID REFERENCES public.content_calendars(id) ON DELETE CASCADE NOT NULL,
+  last_read_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_content_comment_reads_user
+  ON public.content_comment_reads (user_id);
+
 -- Enable Row Level Security
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.content_calendars ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.content_comment_reads ENABLE ROW LEVEL SECURITY;
+
+-- Read-tracking policy: a viewer manages only their own markers.
+DROP POLICY IF EXISTS "Viewers manage own read markers" ON public.content_comment_reads;
+CREATE POLICY "Viewers manage own read markers" ON public.content_comment_reads
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Create policies for users table
 CREATE POLICY "Users can view own profile" ON public.users
