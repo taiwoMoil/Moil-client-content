@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.content_calendars (
   day TEXT NOT NULL,
   platform TEXT[] NOT NULL DEFAULT '{}',
   type TEXT NOT NULL,
+  content_type TEXT,
   team_status TEXT NOT NULL DEFAULT 'not-started' CHECK (team_status IN ('not-started', 'in-progress', 'ready-review', 'ready-post')),
   client_status TEXT NOT NULL DEFAULT 'not-submitted' CHECK (client_status IN ('not-submitted', 'under-review', 'approved', 'needs-changes')),
   is_new BOOLEAN DEFAULT FALSE,

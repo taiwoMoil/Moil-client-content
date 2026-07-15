@@ -56,6 +56,7 @@ export interface Database {
           day: string
           platform: string[]
           type: string
+          content_type?: string
           team_status: 'not-started' | 'in-progress' | 'ready-review' | 'ready-post'
           client_status: 'not-submitted' | 'under-review' | 'approved' | 'needs-changes'
           is_new: boolean
@@ -75,6 +76,7 @@ export interface Database {
           day: string
           platform: string[]
           type: string
+          content_type?: string
           team_status?: 'not-started' | 'in-progress' | 'ready-review' | 'ready-post'
           client_status?: 'not-submitted' | 'under-review' | 'approved' | 'needs-changes'
           is_new?: boolean
@@ -94,6 +96,7 @@ export interface Database {
           day?: string
           platform?: string[]
           type?: string
+          content_type?: string
           team_status?: 'not-started' | 'in-progress' | 'ready-review' | 'ready-post'
           client_status?: 'not-submitted' | 'under-review' | 'approved' | 'needs-changes'
           is_new?: boolean

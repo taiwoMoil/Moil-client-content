@@ -787,6 +787,29 @@ export default function DashboardPage() {
             case 'type':
               item.type = value
               break
+            case 'content_type':
+            case 'content type':
+            case 'contenttype':
+            case 'media_type':
+            case 'media type':
+            case 'format': {
+              // Normalize to one of the supported content types
+              const normalized = value.trim().toLowerCase()
+              const contentTypeMap: Record<string, string> = {
+                'video': 'Video',
+                'still image': 'Still Image',
+                'still': 'Still Image',
+                'image': 'Still Image',
+                'photo': 'Still Image',
+                'carousel': 'Carousel',
+                'animated flyer': 'Animated Flyer',
+                'animated flyers': 'Animated Flyer',
+                'flyer': 'Animated Flyer',
+                'animation': 'Animated Flyer',
+              }
+              item.content_type = contentTypeMap[normalized] || (value ? value.trim() : '')
+              break
+            }
             case 'team_status':
             case 'team status':
               // Validate and normalize team status values
@@ -1697,6 +1720,7 @@ export default function DashboardPage() {
                 <li><strong>Required:</strong> Date, Day, Hook</li>
                 <li><strong>Platform:</strong> Use | to separate multiple platforms (IG|FB|Stories)</li>
                 <li><strong>Content:</strong> Copy, Caption, Content, or Text (all work the same)</li>
+                <li><strong>Content Type:</strong> "Content Type" or "Format" — Video, Still Image, Carousel, Animated Flyer</li>
                 <li><strong>Prompts:</strong> "Image Prompt 1/2", "Prompt 1/2", or "Prompt1/2"</li>
                 <li><strong>Status:</strong> Automatically validates and corrects invalid values</li>
                 <li><strong>Comments:</strong> Comments, Notes, or Note</li>
@@ -2930,12 +2954,21 @@ function MonthGrid({
                   const borderColor = CLIENT_STATUS_BORDER[it.client_status] || 'border-l-gray-300'
                   const primaryPlatform = it.platform?.[0]
                   const dot = primaryPlatform ? PLATFORM_DOT_COLORS[primaryPlatform] || 'bg-gray-400' : 'bg-gray-400'
+                  const ctStyle = it.content_type ? CONTENT_TYPE_STYLES[it.content_type] : undefined
                   return (
                     <div
                       key={it.id}
                       className={`flex items-center gap-1.5 px-1.5 py-1 bg-gray-50 rounded text-[11px] border-l-2 ${borderColor} truncate`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                      {it.content_type && (
+                        <span
+                          className={`flex-shrink-0 text-[9px] leading-none px-1 py-0.5 rounded border ${ctStyle?.badge || 'bg-gray-100 text-gray-600 border-gray-200'}`}
+                          title={it.content_type}
+                        >
+                          {ctStyle?.icon || ''} {it.content_type}
+                        </span>
+                      )}
                       <span className="truncate text-gray-700">{it.type}{it.hook ? ` · ${it.hook}` : ''}</span>
                     </div>
                   )
@@ -2955,6 +2988,14 @@ function MonthGrid({
 // ---------- Day Drawer ----------
 const PLATFORM_OPTIONS = ['Instagram', 'Facebook', 'Google', 'Stories', 'LinkedIn', 'Twitter', 'TikTok', 'YouTube']
 const TYPE_OPTIONS = ['Post', 'Reel', 'Carousel', 'Photo', 'Testimonial', 'Education', 'Offer', 'Promo']
+const CONTENT_TYPE_OPTIONS = ['Video', 'Still Image', 'Carousel', 'Animated Flyer']
+
+const CONTENT_TYPE_STYLES: Record<string, { badge: string; dot: string; icon: string }> = {
+  'Video': { badge: 'bg-rose-100 text-rose-700 border-rose-200', dot: 'bg-rose-500', icon: '🎬' },
+  'Still Image': { badge: 'bg-sky-100 text-sky-700 border-sky-200', dot: 'bg-sky-500', icon: '🖼️' },
+  'Carousel': { badge: 'bg-violet-100 text-violet-700 border-violet-200', dot: 'bg-violet-500', icon: '🎠' },
+  'Animated Flyer': { badge: 'bg-amber-100 text-amber-700 border-amber-200', dot: 'bg-amber-500', icon: '✨' },
+}
 
 const PLATFORM_BADGE_BG: Record<string, string> = {
   Instagram: 'bg-pink-500',
@@ -3171,6 +3212,23 @@ function DayItemCard({
               className="px-2.5 py-1 text-xs font-semibold rounded-full bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30 cursor-pointer"
             >
               {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            {/* Content type pill (editable via select) */}
+            <select
+              value={item.content_type || ''}
+              onChange={(e) => onUpdate(item.id, { content_type: e.target.value })}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-full border focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30 cursor-pointer ${
+                item.content_type
+                  ? CONTENT_TYPE_STYLES[item.content_type]?.badge || 'bg-gray-100 text-gray-700 border-gray-200'
+                  : 'bg-gray-100 text-gray-500 border-gray-200'
+              }`}
+              title="Content type"
+            >
+              <option value="">Content type…</option>
+              {CONTENT_TYPE_OPTIONS.map(t => (
+                <option key={t} value={t}>{CONTENT_TYPE_STYLES[t]?.icon} {t}</option>
+              ))}
             </select>
 
             {/* Platform badges */}
