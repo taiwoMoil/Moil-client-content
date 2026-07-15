@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ContentCalendarItem, User } from '@/lib/types/database'
+import { CommentEntry, createComment, countUnreadForItems } from '@/lib/comments'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientBranding, ClientHeader } from '@/components/client-branding'
 import { Metaballs } from '@paper-design/shaders-react'
@@ -15,10 +16,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [user, setUser] = useState<User | null>(null)
+  // Per-viewer read markers: itemId -> last_read_at ISO string. Powers the
+  // unread-comment badge on the calendar.
+  const [reads, setReads] = useState<Record<string, string>>({})
   const [commentModal, setCommentModal] = useState<{
     isOpen: boolean;
     itemId: string;
-    comments: string[];
+    comments: CommentEntry[];
     newComment: string;
   }>({
     isOpen: false,
@@ -175,6 +179,7 @@ export default function DashboardPage() {
           return new Date(a.date).getTime() - new Date(b.date).getTime()
         })
         setCalendarData(sortedData)
+        fetchReads()
       } else {
         // Handle different error types
         if (response.status === 404) {
@@ -197,6 +202,36 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  // Load this viewer's comment read markers (independent of impersonation -
+  // each authenticated user keeps their own unread state).
+  const fetchReads = async () => {
+    try {
+      const response = await fetch('/api/calendar/reads')
+      if (response.ok) {
+        const result = await response.json()
+        setReads(result.data || {})
+      }
+    } catch {
+      // Non-fatal: without read markers everything just shows as unread.
+    }
+  }
+
+  // Mark an item's comment thread as read up to now for this viewer, and clear
+  // its unread badge optimistically.
+  const markItemRead = async (itemId: string) => {
+    const readAt = new Date().toISOString()
+    setReads(prev => ({ ...prev, [itemId]: readAt }))
+    try {
+      await fetch('/api/calendar/reads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, readAt }),
+      })
+    } catch {
+      // Optimistic update already applied; ignore transient failures.
+    }
   }
 
   const updateCalendarItem = async (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => {
@@ -270,13 +305,15 @@ export default function DashboardPage() {
     }
   }
 
-  const openCommentModal = (itemId: string, currentComments: string[]) => {
+  const openCommentModal = (itemId: string, currentComments: CommentEntry[]) => {
     setCommentModal({
       isOpen: true,
       itemId,
       comments: currentComments || [],
       newComment: ''
     })
+    // Opening the thread means the viewer has now seen these comments.
+    markItemRead(itemId)
   }
 
   const addComment = async () => {
@@ -288,10 +325,15 @@ export default function DashboardPage() {
         type: 'comment'
       })
 
-      const updatedComments = [...commentModal.comments, commentModal.newComment.trim()]
-      
+      const authorRole = user?.role === 'admin' ? 'team' : 'client'
+      const newEntry = createComment(commentModal.newComment.trim(), authorRole, new Date().toISOString())
+      const updatedComments = [...commentModal.comments, newEntry]
+
       try {
         await updateCalendarItem(commentModal.itemId, { comments: updatedComments })
+        // The author has obviously seen their own comment - keep it from
+        // counting as unread to themselves.
+        markItemRead(commentModal.itemId)
         
         // Send email notification
         try {
@@ -854,11 +896,14 @@ export default function DashboardPage() {
             case 'comment':
             case 'notes':
             case 'note':
-              // Handle comments - convert string to array if needed
-              if (value) {
-                item.comments = Array.isArray(value) ? value : [value]
-              } else {
-                item.comments = []
+              // Handle comments - wrap CSV strings into comment objects.
+              {
+                const rawList = value ? (Array.isArray(value) ? value : value.split(' | ')) : []
+                const nowISO = new Date().toISOString()
+                item.comments = rawList
+                  .map((c: string) => (typeof c === 'string' ? c.trim() : ''))
+                  .filter((c: string) => c.length > 0)
+                  .map((c: string) => createComment(c, 'unknown', nowISO))
               }
               break
             default:
@@ -945,7 +990,7 @@ export default function DashboardPage() {
         `"${item.kpi || ''}"`,
         `"${item.image_prompt_1 || ''}"`,
         `"${item.image_prompt_2 || ''}"`,
-        `"${Array.isArray(item.comments) ? item.comments.join(' | ') : ''}"`
+        `"${Array.isArray(item.comments) ? item.comments.map(c => (typeof c === 'string' ? c : c?.text ?? '')).join(' | ').replace(/"/g, '""') : ''}"`
       ].join(','))
     ].join('\n')
 
@@ -1546,6 +1591,7 @@ export default function DashboardPage() {
                 <MonthGrid
                   viewMonth={viewMonth}
                   itemsByDay={itemsByDay}
+                  reads={reads}
                   onSelectDay={setSelectedDayKey}
                 />
                 {Object.keys(itemsByDay).length === 0 && (
@@ -1802,9 +1848,20 @@ export default function DashboardPage() {
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">Previous Comments:</h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {commentModal.comments.map((comment, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg border group hover:bg-gray-100 transition-colors">
+                    <div key={comment.id || index} className="p-3 bg-gray-50 rounded-lg border group hover:bg-gray-100 transition-colors">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm text-gray-900 flex-1">{comment}</p>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-900">{comment.text}</p>
+                          {(comment.authorRole !== 'unknown' || comment.createdAt > '1970') && (
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              {comment.authorRole === 'team' ? 'Team' : comment.authorRole === 'client' ? 'Client' : ''}
+                              {comment.authorRole !== 'unknown' && comment.createdAt > '1970' ? ' · ' : ''}
+                              {comment.createdAt > '1970'
+                                ? new Date(comment.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                : ''}
+                            </p>
+                          )}
+                        </div>
                         <button
                           onClick={() => deleteComment(index)}
                           className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition-all duration-200"
@@ -2225,7 +2282,7 @@ function CalendarRow({
   updating: boolean
   onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
   onCopyCaption: (copy: string) => void
-  onOpenComment: (itemId: string, comments: string[]) => void
+  onOpenComment: (itemId: string, comments: CommentEntry[]) => void
   onDelete: (id: string, date: string) => void
   onGenerateImage: (prompt: string) => void
   onRegenerateContent: (itemId: string, contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2', currentContent: string, context: ContentCalendarItem) => void
@@ -2864,10 +2921,12 @@ const CLIENT_STATUS_BORDER: Record<string, string> = {
 function MonthGrid({
   viewMonth,
   itemsByDay,
+  reads,
   onSelectDay,
 }: {
   viewMonth: Date
   itemsByDay: Record<string, ContentCalendarItem[]>
+  reads: Record<string, string>
   onSelectDay: (k: string) => void
 }) {
   const year = viewMonth.getFullYear()
@@ -2917,6 +2976,8 @@ function MonthGrid({
           const k = key(c.date)
           const items = c.inMonth ? itemsByDay[k] || [] : []
           const hasItems = items.length > 0
+          const unreadCount = countUnreadForItems(items, reads)
+          const commentCount = items.reduce((sum, it) => sum + (Array.isArray(it.comments) ? it.comments.length : 0), 0)
           return (
             <button
               key={i}
@@ -2942,9 +3003,19 @@ function MonthGrid({
                 >
                   {c.date.getDate()}
                 </span>
-                {hasItems && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[var(--primary)]/10 text-[var(--primary)] rounded-full">
-                    {items.length}
+                {commentCount > 0 && (
+                  <span
+                    title={
+                      unreadCount > 0
+                        ? `${unreadCount} new of ${commentCount} comment${commentCount === 1 ? '' : 's'}`
+                        : `${commentCount} comment${commentCount === 1 ? '' : 's'}`
+                    }
+                    className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      unreadCount > 0 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}
+                  >
+                    <MessageCircle className="w-2.5 h-2.5" />
+                    {commentCount}
                   </span>
                 )}
               </div>
@@ -3061,7 +3132,7 @@ function DayDrawer({
   updatingId: string | null
   onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
   onCopyCaption: (copy: string) => void
-  onOpenComment: (itemId: string, comments: string[]) => void
+  onOpenComment: (itemId: string, comments: CommentEntry[]) => void
   onDelete: (id: string, date: string) => void
   onGenerateImage: (prompt: string) => void
   onRegenerateContent: (itemId: string, contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2', currentContent: string, context: ContentCalendarItem) => void
@@ -3169,7 +3240,7 @@ function DayItemCard({
   updating: boolean
   onUpdate: (id: string, updates: Partial<ContentCalendarItem>, updateType?: 'team' | 'client') => void
   onCopyCaption: (copy: string) => void
-  onOpenComment: (itemId: string, comments: string[]) => void
+  onOpenComment: (itemId: string, comments: CommentEntry[]) => void
   onDelete: (id: string, date: string) => void
   onGenerateImage: (prompt: string) => void
   onRegenerateContent: (itemId: string, contentType: 'hook' | 'caption' | 'image_prompt_1' | 'image_prompt_2', currentContent: string, context: ContentCalendarItem) => void
